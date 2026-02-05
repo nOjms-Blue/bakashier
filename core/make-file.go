@@ -3,6 +3,7 @@ package core
 import (
 	"bakashier/data"
 
+	"io"
 	"os"
 	"path/filepath"
 )
@@ -15,4 +16,21 @@ func MakeFile(currentDir string, archive data.ArchiveData, password string) erro
 	if err != nil { return err }
 	filePath := filepath.Join(currentDir, filename)
 	return os.WriteFile(filePath, content, 0644)
+}
+
+// ファイルパスとパスワードを受け取り、data.ArchiveDataを作成する関数
+func MakeArchiveFile(filePath string, password string) (data.ArchiveData, error) {
+	filename := filepath.Base(filePath)
+	f, err := os.Open(filePath)
+	if err != nil {
+		return data.ArchiveData{}, err
+	}
+	defer f.Close()
+
+	content, err := io.ReadAll(f)
+	if err != nil {
+		return data.ArchiveData{}, err
+	}
+
+	return data.ToArchiveData(filename, content, password)
 }

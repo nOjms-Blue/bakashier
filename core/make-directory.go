@@ -14,3 +14,10 @@ func MakeDirectory(currentDir string, archive data.ArchiveData, password string)
 	dirPath := filepath.Join(currentDir, filename)
 	return os.Mkdir(dirPath, 0755)
 }
+
+// ディレクトリ名とパスワードを受け取り、data.ArchiveDataを作成する関数
+func MakeArchiveDirectory(dirName string, password string) (data.ArchiveData, error) {
+	// ディレクトリなので内容は空のバイト配列
+	content := []byte{}
+	return data.ToArchiveData(dirName, content, password)
+}
