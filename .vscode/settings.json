@@ -1,0 +1,6 @@
+{
+	"material-icon-theme.files.customClones": [
+		{"name": "notice", "base": "license", "color": "blue-400", "fileNames": ["NOTICE"]}
+	],
+	"material-icon-theme.folders.customClones": []
+}

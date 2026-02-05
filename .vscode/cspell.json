@@ -1,0 +1,5 @@
+{
+	"ignorePaths": ["go.mod"],
+	"ignoreWords": [],
+	"words": ["bakashier"],
+}

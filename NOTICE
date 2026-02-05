@@ -1,0 +1,11 @@
+This project includes third-party code under the following licenses:
+
+---
+
+Go standard library (fmt)
+https://go.dev/
+License: BSD 3-Clause License
+Copyright (c) 2009 The Go Authors.
+See: https://go.dev/LICENSE
+
+---
