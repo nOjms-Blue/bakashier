@@ -2,10 +2,18 @@ This project includes third-party code under the following licenses:
 
 ---
 
-Go standard library (fmt)
+Go standard library
 https://go.dev/
 License: BSD 3-Clause License
 Copyright (c) 2009 The Go Authors.
 See: https://go.dev/LICENSE
+
+---
+
+golang.org/x/crypto
+https://pkg.go.dev/golang.org/x/crypto
+License: BSD 3-Clause License
+Copyright (c) 2009 The Go Authors.
+See: https://cs.opensource.google/go/x/crypto/+/master:LICENSE
 
 ---
