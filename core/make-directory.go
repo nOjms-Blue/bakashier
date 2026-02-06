@@ -15,9 +15,13 @@ func MakeDirectory(currentDir string, archive data.ArchiveData, password string)
 	return os.Mkdir(dirPath, 0755)
 }
 
-// ディレクトリ名とパスワードを受け取り、data.ArchiveDataを作成する関数
-func MakeArchiveDirectory(dirName string, password string) (data.ArchiveData, error) {
-	// ディレクトリなので内容は空のバイト配列
-	content := []byte{}
+// ディレクトリパスとパスワードを受け取り、data.ArchiveData を作成する。
+// Data にはそのディレクトリ直下のファイル・サブディレクトリの情報（名前・サイズ・最終更新日時）を格納する。
+func MakeArchiveDirectory(dirPath string, password string) (data.ArchiveData, error) {
+	content, err := data.BuildDirectoryListingData(dirPath)
+	if err != nil {
+		return data.ArchiveData{}, err
+	}
+	dirName := filepath.Base(dirPath)
 	return data.ToArchiveData(dirName, content, password)
 }
