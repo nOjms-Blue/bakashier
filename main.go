@@ -9,5 +9,5 @@ import (
 func main() {
 	fmt.Println("Hello, World!")
 	
-	core.Backup("backup", "dist", "password")
+	core.Backup("src", "dist", "password")
 }
