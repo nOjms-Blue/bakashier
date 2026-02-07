@@ -37,17 +37,12 @@ type workerMessage struct {
 	Detail  string
 }
 
-var dispatcherQueue chan dispatcherMessage
-var workerQueue chan workerMessage
-
-func backupDispatcher(workers int, wg *sync.WaitGroup) {
+func backupDispatcher(workers int, dispatcherQueue <-chan dispatcherMessage, workerQueue chan<- workerMessage, wg *sync.WaitGroup) {
 	defer wg.Done()
 	
 	var untreated int = 0
 	for ;; {
 		msg := <-dispatcherQueue
-		
-		fmt.Printf("untreated: %d\n", untreated)
 		
 		switch msg.MsgType {
 		case FIND_DIR:
@@ -78,7 +73,7 @@ func backupDispatcher(workers int, wg *sync.WaitGroup) {
 	}
 }
 
-func backupWorker(password string, wg *sync.WaitGroup) {
+func backupWorker(password string, dispatcherQueue chan<- dispatcherMessage, workerQueue <-chan workerMessage, wg *sync.WaitGroup) {
 	defer wg.Done()
 	
 	for ;; {
@@ -156,6 +151,4 @@ func backupWorker(password string, wg *sync.WaitGroup) {
 			}
 		}()
 	}
-	
-	fmt.Printf("Worker finished\n")
 }
