@@ -11,3 +11,6 @@
 # Go workspace file
 go.work
 go.work.sum
+
+# backup files
+backup/
