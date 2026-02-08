@@ -45,8 +45,8 @@ func ExportStreamArchive(srcFile string, destFile string, fileName string, passw
 	for {
 		chunk := make([]byte, chunkSize)
 		n, err := src.Read(chunk)
+		if err == io.EOF || n == 0 { break }
 		if err != nil { return err }
-		if n == 0 { break }
 		
 		// CRC32 ハッシュを計算
 		chunkCRC := utils.CRC32HashBytes(chunk)
