@@ -9,6 +9,7 @@ import (
 
 type DirectoryEntryType byte
 const (
+	Unknown   DirectoryEntryType = 'U'
 	Directory DirectoryEntryType = 'D'
 	File      DirectoryEntryType = 'F'
 )

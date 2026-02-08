@@ -5,10 +5,12 @@ import (
 	"os"
 	"path/filepath"
 	"sync"
-	
+	"time"
+
 	"bakashier/data"
 	"bakashier/utils"
 )
+
 
 func backupDispatcher(workers int, dispatcherQueue <-chan dispatcherMessage, workerQueue chan<- workerMessage, wg *sync.WaitGroup) {
 	defer wg.Done()
@@ -46,6 +48,20 @@ func backupDispatcher(workers int, dispatcherQueue <-chan dispatcherMessage, wor
 	}
 }
 
+func loadDirectoryEntries(directoryEntryFile string, password string) ([]data.DirectoryEntry, error) {
+	var entryFile data.ArchiveData
+	if _, err := os.Stat(directoryEntryFile); err == nil {
+		err = entryFile.Import(directoryEntryFile)
+		if err != nil { return []data.DirectoryEntry{}, err }
+		_, content, err := data.FromArchiveData(entryFile, password)
+		if err != nil { return []data.DirectoryEntry{}, err }
+		entries, err := data.ImportDirectoryEntries(content)
+		if err != nil { return []data.DirectoryEntry{}, err }
+		return entries, nil
+	}
+	return []data.DirectoryEntry{}, nil
+}
+
 func backupWorker(password string, dispatcherQueue chan<- dispatcherMessage, workerQueue <-chan workerMessage, wg *sync.WaitGroup) {
 	defer wg.Done()
 	
@@ -76,52 +92,127 @@ func backupWorker(password string, dispatcherQueue chan<- dispatcherMessage, wor
 			}
 			
 			nameMap := make(map[string]string)
+			newEntries := make(map[string]data.DirectoryEntry)
+			directoryEntryFile := filepath.Join(queue.DistDir, "_directory_.bks")
+			entries, err := loadDirectoryEntries(directoryEntryFile, password)
+			if err != nil {
+				errHandler("Failed to load directory entries", err)
+				return
+			}
+			
 			for _, file := range files {
-				generatedName := utils.GenerateUniqueRandomName(nameMap)
-				nameMap[generatedName] = file.Name()
+				hideName := utils.GenerateUniqueRandomName(nameMap)
+				entry := data.DirectoryEntry{ Type: data.Unknown }
+				for _, registered := range entries {
+					if registered.RealName == file.Name() {
+						hideName = registered.HideName
+						entry = registered
+						break
+					}
+				}
+				nameMap[hideName] = file.Name()
 				
 				if file.IsDir() {
-					err = os.MkdirAll(filepath.Join(queue.DistDir, generatedName), 0755)
+					// ディレクトリを作成
+					err = os.MkdirAll(filepath.Join(queue.DistDir, hideName), 0755)
 					if err != nil {
 						errHandler("Failed to create directory", err)
 						return
 					}
 					
+					// ディレクトリエントリを追加
+					newEntries[hideName] = data.DirectoryEntry{
+						Type: data.Directory,
+						RealName: file.Name(),
+						HideName: hideName,
+						Size: uint64(0),
+						ModTime: time.Now(),
+					}
+					
+					// 子ディレクトリの発見を通知
 					dispatcherQueue <- dispatcherMessage{
 						MsgType: FIND_DIR,
 						SrcDir: filepath.Join(queue.SrcDir, file.Name()),
-						DistDir: filepath.Join(queue.DistDir, generatedName),
+						DistDir: filepath.Join(queue.DistDir, hideName),
 						Detail: "",
 					}
+					
+					fmt.Printf("Successfully found directory %s\n", file.Name())
 				} else {
+					fileInfo, err := file.Info()
+					if err != nil {
+						errHandler("Failed to get file info", err)
+						continue
+					}
+					
+					// 変更がない場合はスキップ
+					if (entry.Type == data.File) {
+						if (entry.Size == uint64(fileInfo.Size()) && entry.ModTime.Equal(fileInfo.ModTime())) {
+							newEntries[hideName] = entry
+							continue
+						}
+					}
+					
+					// ファイルを読み込む
 					content, err := os.ReadFile(filepath.Join(queue.SrcDir, file.Name()))
 					if err != nil {
 						errHandler("Failed to read file", err)
 						return
 					}
 					
+					// アーカイブデータを作成
 					archive, err := data.ToArchiveData(file.Name(), content, password)
 					if err != nil {
 						errHandler("Failed to create archive data", err)
 						return
 					}
 					
-					err = archive.Export(filepath.Join(queue.DistDir, fmt.Sprintf("%s.bks", generatedName)))
+					// アーカイブデータを保存
+					err = archive.Export(filepath.Join(queue.DistDir, fmt.Sprintf("%s.bks", hideName)))
 					if err != nil {
 						errHandler("Failed to export archive", err)
 						return
 					}
 					
-					//fmt.Printf("Successfully archived %s -> %s\n", file.Name(), filepath.Join(queue.DistDir, generatedName))
+					// ファイルエントリを追加
+					newEntries[hideName] = data.DirectoryEntry{
+						Type: data.File,
+						RealName: file.Name(),
+						HideName: hideName,
+						Size: uint64(fileInfo.Size()),
+						ModTime: fileInfo.ModTime(),
+					}
+					fmt.Printf("Successfully archived %s -> %s\n", file.Name(), filepath.Join(queue.DistDir, hideName))
 				}
 			}
 			
-			dispatcherQueue <- dispatcherMessage{
-				MsgType: FINISH_JOB,
-				SrcDir: queue.SrcDir,
-				DistDir: queue.DistDir,
-				Detail: "",
+			// ディレクトリエントリを保存
+			entries = make([]data.DirectoryEntry, 0, len(newEntries))
+			for _, entry := range newEntries {
+				entries = append(entries, entry)
+			}
+			content, err := data.ExportDirectoryEntries(entries)
+			if err != nil {
+				errHandler("Failed to export directory entries", err)
+				return
+			}
+			archive, err := data.ToArchiveData(queue.SrcDir, content, password)
+			if err != nil {
+				errHandler("Failed to create export directory entries archive data", err)
+				return
+			}
+			err = archive.Export(directoryEntryFile)
+			if err != nil {
+				errHandler("Failed to export directory entries archive", err)
+				return
 			}
 		}()
+		
+		dispatcherQueue <- dispatcherMessage{
+			MsgType: FINISH_JOB,
+			SrcDir: queue.SrcDir,
+			DistDir: queue.DistDir,
+			Detail: "",
+		}
 	}
 }
