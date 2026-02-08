@@ -2,6 +2,7 @@ package data
 
 import (
 	"bakashier/utils"
+	"bytes"
 
 	"errors"
 )
@@ -11,8 +12,13 @@ func ToArchiveData(filename string, content []byte, password string) (ArchiveDat
 	if password == "" {
 		return ArchiveData{}, errors.New("password is required")
 	}
-	
 	nameBytes := []byte(filename)
+	
+	beforeHash := []byte{}
+	beforeHash = append(beforeHash, nameBytes...)
+	beforeHash = append(beforeHash, content...)
+	hash := utils.CRC32HashBytes(beforeHash)
+	
 	compressedName, err := utils.CompressBytes(nameBytes)
 	if err != nil { return ArchiveData{}, err }
 	encryptedName, err := utils.EncryptBytesWithPassword(compressedName, password)
@@ -25,6 +31,7 @@ func ToArchiveData(filename string, content []byte, password string) (ArchiveDat
 	return ArchiveData{
 		Name: encryptedName,
 		Data: encryptedContent,
+		Hash: hash,
 	}, nil
 }
 
@@ -42,5 +49,14 @@ func FromArchiveData(archive ArchiveData, password string) (filename string, con
 	if err != nil { return "", nil, err }
 	content, err = utils.DecompressBytes(decryptedContent)
 	if err != nil { return "", nil, err }
+	
+	name_and_content := []byte{}
+	name_and_content = append(name_and_content, nameBytes...)
+	name_and_content = append(name_and_content, content...)
+	hash := utils.CRC32HashBytes(name_and_content)
+	if !bytes.Equal(hash, archive.Hash) {
+		return "", nil, errors.New("file is not a valid archived file (hash mismatch)")
+	}
+	
 	return string(nameBytes), content, nil
 }

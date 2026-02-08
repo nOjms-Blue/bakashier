@@ -1,9 +1,6 @@
 package data
 
 import (
-	"bakashier/utils"
-
-	"bytes"
 	"encoding/binary"
 	"errors"
 	"os"
@@ -14,6 +11,7 @@ import (
 type ArchiveData struct {
 	Name []byte
 	Data []byte
+	Hash []byte
 }
 
 // fileName の .bks ファイルを読み、ヘッダー検証と CRC32 チェック後に d に格納する。
@@ -31,12 +29,7 @@ func (d *ArchiveData) Import(fileName string) error {
 	data_end := name_end + archived_data_len
 	d.Name = content[17:name_end]
 	d.Data = content[name_end:data_end]
-	
-	import_hash := content[data_end:]
-	calc_hash := utils.CRC32HashBytes(content[17:data_end])
-	if !bytes.Equal(import_hash, calc_hash) {
-		return errors.New("file is not a valid archived file (hash mismatch)")
-	}
+	d.Hash = content[data_end:]
 	return nil
 }
 
@@ -54,7 +47,6 @@ func (d ArchiveData) Export(fileName string) error {
 	
 	name_and_data = append(name_and_data, d.Name...)
 	name_and_data = append(name_and_data, d.Data...)
-	calc_hash := utils.CRC32HashBytes(name_and_data)
 	
 	content = append(content, byte('B'))
 	content = append(content, byte('K'))
@@ -63,7 +55,7 @@ func (d ArchiveData) Export(fileName string) error {
 	content = append(content, archived_name_len_bin...)
 	content = append(content, archived_data_len_bin...)
 	content = append(content, name_and_data...)
-	content = append(content, calc_hash...)
+	content = append(content, d.Hash...)
 	
 	return os.WriteFile(fileName, content, 0644)
 }
