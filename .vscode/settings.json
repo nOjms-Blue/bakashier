@@ -1,4 +1,8 @@
 {
+	"material-icon-theme.files.associations": {
+		"README.ja.md": "readme",
+		"README.md": "readme",
+	},
 	"material-icon-theme.files.customClones": [
 		{"name": "main.go", "base": "go", "color": "indigo-A100", "fileNames": ["main.go"]},
 		{"name": "notice", "base": "license", "color": "blue-400", "fileNames": ["NOTICE"]}
