@@ -29,9 +29,9 @@ func (d *ArchiveData) Import(fileName string) error {
 	d.Data = content[name_end:data_end]
 	
 	import_hash := content[data_end:]
-	calc_hash := utils.CRC32HashBytes(content[5:data_end])
+	calc_hash := utils.CRC32HashBytes(content[17:data_end])
 	if !bytes.Equal(import_hash, calc_hash) {
-		return errors.New("file is not a valid archived file")
+		return errors.New("file is not a valid archived file (hash mismatch)")
 	}
 	return nil
 }
