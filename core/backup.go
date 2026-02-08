@@ -5,37 +5,10 @@ import (
 	"os"
 	"path/filepath"
 	"sync"
-
+	
 	"bakashier/data"
 	"bakashier/utils"
 )
-
-type dispatcherMessageType string
-const (
-	FIND_DIR    dispatcherMessageType = "FIND_DIR"
-	FINISH_JOB  dispatcherMessageType = "FINISH_JOB"
-	ERROR       dispatcherMessageType = "ERROR"
-)
-
-type workerMessageType string
-const (
-	NEXT_JOB    workerMessageType = "NEXT_JOB"
-	EXIT        workerMessageType = "EXIT"
-)
-
-type dispatcherMessage struct {
-	MsgType dispatcherMessageType
-	SrcDir  string
-	DistDir string
-	Detail  string
-}
-
-type workerMessage struct {
-	MsgType workerMessageType
-	SrcDir  string
-	DistDir string
-	Detail  string
-}
 
 func backupDispatcher(workers int, dispatcherQueue <-chan dispatcherMessage, workerQueue chan<- workerMessage, wg *sync.WaitGroup) {
 	defer wg.Done()
@@ -133,7 +106,7 @@ func backupWorker(password string, dispatcherQueue chan<- dispatcherMessage, wor
 						return
 					}
 					
-					err = archive.Export(filepath.Join(queue.DistDir, generatedName))
+					err = archive.Export(filepath.Join(queue.DistDir, fmt.Sprintf("%s.bks", generatedName)))
 					if err != nil {
 						errHandler("Failed to export archive", err)
 						return
