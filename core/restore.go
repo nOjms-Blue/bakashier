@@ -116,25 +116,14 @@ func restoreWorker(password string, dispatcherQueue chan<- dispatcherMessage, wo
 					fmt.Printf("Successfully restored directory %s\n", realDir)
 				case data.File:
 					archiveFile := filepath.Join(queue.SrcDir, fmt.Sprintf("%s.bks", entry.HideName))
-					var archive data.ArchiveData
-					err = archive.Import(archiveFile)
-					if err != nil {
-						errHandler("Failed to import archive", err)
-						return
-					}
-					_, content, err := data.FromArchiveData(archive, password)
-					if err != nil {
-						errHandler("Failed to decode archive", err)
-						return
-					}
 					
-					realFile := filepath.Join(queue.DistDir, entry.RealName)
-					err = os.WriteFile(realFile, content, 0644)
+					err, realFile := data.ImportStreamArchive(archiveFile, queue.DistDir, password)
 					if err != nil {
-						errHandler("Failed to write file", err)
+						errHandler("Failed to import stream archive", err)
 						return
 					}
 					_ = os.Chtimes(realFile, time.Now(), entry.ModTime)
+					
 					fmt.Printf("Successfully restored %s -> %s\n", archiveFile, realFile)
 				default:
 					errHandler("Unknown entry type", fmt.Errorf("%v", entry.Type))
