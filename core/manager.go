@@ -1,6 +1,7 @@
 package core
 
 import (
+	"runtime"
 	"sync"
 )
 
@@ -8,8 +9,15 @@ import (
 // ディスパッチャ1つとワーカー4つを起動し、チャネルでジョブを分配する。
 func Backup(srcDir string, distDir string, password string) {
 	var wg sync.WaitGroup
-	dispatcherQueue := make(chan dispatcherMessage, 64)
-	workerQueue := make(chan workerMessage, 64)
+	var workers int
+	var queueSize int
+	
+	workers = runtime.GOMAXPROCS(0)
+	if workers >= 2 { workers = workers - 1 }
+	queueSize = workers * 8
+	
+	dispatcherQueue := make(chan dispatcherMessage, queueSize)
+	workerQueue := make(chan workerMessage, queueSize)
 	
 	dispatcherQueue <- dispatcherMessage{
 		MsgType: FIND_DIR,
@@ -17,10 +25,9 @@ func Backup(srcDir string, distDir string, password string) {
 		DistDir: distDir,
 		Detail: "",
 	}
-	var workers int = 4
 	
 	wg.Add(workers + 1)
-	go backupDispatcher(workers, dispatcherQueue, workerQueue, &wg)
+	go backupDispatcher(workers, queueSize, dispatcherQueue, workerQueue, &wg)
 	for i := 0; i < workers; i++ {
 		go backupWorker(password, dispatcherQueue, workerQueue, &wg)
 	}
@@ -34,8 +41,15 @@ func Backup(srcDir string, distDir string, password string) {
 // ディスパッチャ1つとワーカー4つを起動し、チャネルでジョブを分配する。
 func Restore(srcDir string, distDir string, password string) {
 	var wg sync.WaitGroup
-	dispatcherQueue := make(chan dispatcherMessage, 64)
-	workerQueue := make(chan workerMessage, 64)
+	var workers int
+	var queueSize int
+	
+	workers = runtime.GOMAXPROCS(0)
+	if workers >= 2 { workers = workers - 1 }
+	queueSize = workers * 8
+	
+	dispatcherQueue := make(chan dispatcherMessage, queueSize)
+	workerQueue := make(chan workerMessage, queueSize)
 	
 	dispatcherQueue <- dispatcherMessage{
 		MsgType: FIND_DIR,
@@ -43,10 +57,9 @@ func Restore(srcDir string, distDir string, password string) {
 		DistDir: distDir,
 		Detail:  "",
 	}
-	var workers int = 4
 	
 	wg.Add(workers + 1)
-	go restoreDispatcher(workers, dispatcherQueue, workerQueue, &wg)
+	go restoreDispatcher(workers, queueSize, dispatcherQueue, workerQueue, &wg)
 	for i := 0; i < workers; i++ {
 		go restoreWorker(password, dispatcherQueue, workerQueue, &wg)
 	}

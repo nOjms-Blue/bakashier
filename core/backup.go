@@ -13,21 +13,22 @@ import (
 
 // ディスパッチャキューからメッセージを受け取り、ワーカーにジョブを配分する。
 // FIND_DIR でジョブを投入し、全ジョブが FINISH_JOB で完了すると各ワーカーに EXIT を送る。
-func backupDispatcher(workers int, dispatcherQueue <-chan dispatcherMessage, workerQueue chan<- workerMessage, wg *sync.WaitGroup) {
+func backupDispatcher(workers int, queueSize int, dispatcherQueue <-chan dispatcherMessage, workerQueue chan<- workerMessage, wg *sync.WaitGroup) {
 	defer wg.Done()
 
 	var untreated int = 0
+	var untreatedMessage = []workerMessage{}
 	for {
 		msg := <-dispatcherQueue
 		
 		switch msg.MsgType {
 		case FIND_DIR:
-			workerQueue <- workerMessage{
+			untreatedMessage = append(untreatedMessage, workerMessage{
 				MsgType: NEXT_JOB,
 				SrcDir: msg.SrcDir,
 				DistDir: msg.DistDir,
 				Detail: msg.Detail,
-			}
+			})
 			untreated++
 		case FINISH_JOB:
 			untreated--
@@ -45,6 +46,19 @@ func backupDispatcher(workers int, dispatcherQueue <-chan dispatcherMessage, wor
 				}
 			}
 			break
+		}
+		
+		for {
+			if len(dispatcherQueue) != 0 { break }
+			if len(untreatedMessage) == 0 { break }
+			
+			msg := untreatedMessage[0]
+			select {
+				case workerQueue <- msg:
+					untreatedMessage = untreatedMessage[1:]
+				default:
+					time.Sleep(10 * time.Millisecond)
+			}
 		}
 	}
 }

@@ -12,10 +12,11 @@ import (
 
 // ディスパッチャキューからメッセージを受け取り、ワーカーにジョブを配分する。
 // 全ジョブ完了後に各ワーカーに EXIT を送って終了する。
-func restoreDispatcher(workers int, dispatcherQueue <-chan dispatcherMessage, workerQueue chan<- workerMessage, wg *sync.WaitGroup) {
+func restoreDispatcher(workers int, queueSize int, dispatcherQueue <-chan dispatcherMessage, workerQueue chan<- workerMessage, wg *sync.WaitGroup) {
 	defer wg.Done()
 
 	var untreated int = 0
+	var untreatedMessage = []workerMessage{}
 	for {
 		msg := <-dispatcherQueue
 
@@ -44,6 +45,19 @@ func restoreDispatcher(workers int, dispatcherQueue <-chan dispatcherMessage, wo
 				}
 			}
 			break
+		}
+		
+		for {
+			if len(dispatcherQueue) != 0 { break }
+			if len(untreatedMessage) == 0 { break }
+			
+			msg := untreatedMessage[0]
+			select {
+				case workerQueue <- msg:
+					untreatedMessage = untreatedMessage[1:]
+				default:
+					time.Sleep(10 * time.Millisecond)
+			}
 		}
 	}
 }
