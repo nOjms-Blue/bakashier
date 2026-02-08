@@ -9,12 +9,8 @@ import (
 // ディスパッチャ1つとワーカー4つを起動し、チャネルでジョブを分配する。
 func Backup(srcDir string, distDir string, password string) {
 	var wg sync.WaitGroup
-	var workers int
-	var queueSize int
-	
-	workers = runtime.GOMAXPROCS(0)
-	if workers >= 2 { workers = workers - 1 }
-	queueSize = workers * 8
+	var workers int = runtime.GOMAXPROCS(0)
+	var queueSize int = workers * 8
 	
 	dispatcherQueue := make(chan dispatcherMessage, queueSize)
 	workerQueue := make(chan workerMessage, queueSize)
@@ -41,12 +37,8 @@ func Backup(srcDir string, distDir string, password string) {
 // ディスパッチャ1つとワーカー4つを起動し、チャネルでジョブを分配する。
 func Restore(srcDir string, distDir string, password string) {
 	var wg sync.WaitGroup
-	var workers int
-	var queueSize int
-	
-	workers = runtime.GOMAXPROCS(0)
-	if workers >= 2 { workers = workers - 1 }
-	queueSize = workers * 8
+	var workers int = runtime.GOMAXPROCS(0)
+	var queueSize int = workers * 8
 	
 	dispatcherQueue := make(chan dispatcherMessage, queueSize)
 	workerQueue := make(chan workerMessage, queueSize)
