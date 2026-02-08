@@ -10,6 +10,8 @@ import (
 	"bakashier/data"
 )
 
+// ディスパッチャキューからメッセージを受け取り、ワーカーにジョブを配分する。
+// 全ジョブ完了後に各ワーカーに EXIT を送って終了する。
 func restoreDispatcher(workers int, dispatcherQueue <-chan dispatcherMessage, workerQueue chan<- workerMessage, wg *sync.WaitGroup) {
 	defer wg.Done()
 
@@ -46,9 +48,11 @@ func restoreDispatcher(workers int, dispatcherQueue <-chan dispatcherMessage, wo
 	}
 }
 
+// ワーカーキューからジョブを受け取り、_directory_.bks と .bks ファイルから復元する。
+// ディレクトリエントリに従い、隠し名の .bks を復号して実名で distDir に書き出す。
 func restoreWorker(password string, dispatcherQueue chan<- dispatcherMessage, workerQueue <-chan workerMessage, wg *sync.WaitGroup) {
 	defer wg.Done()
-	
+
 	for {
 		queue := <-workerQueue
 		if queue.MsgType == EXIT {

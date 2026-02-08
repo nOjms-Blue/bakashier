@@ -2,18 +2,22 @@ package data
 
 import (
 	"bakashier/utils"
-	
+
 	"bytes"
 	"encoding/binary"
 	"errors"
 	"os"
 )
 
+// アーカイブ内の「名前」と「データ」の生バイトを保持する。
+// 実体は暗号化・圧縮された内容であり、FromArchiveData で復号・展開する。
 type ArchiveData struct {
 	Name []byte
 	Data []byte
 }
 
+// fileName の .bks ファイルを読み、ヘッダー検証と CRC32 チェック後に d に格納する。
+// フォーマット: "BKS" + version(2) + nameLen(4) + dataLen(8) + name + data + CRC32(4)
 func (d *ArchiveData) Import(fileName string) error {
 	content, err := os.ReadFile(fileName)
 	if err != nil { return err }
@@ -36,6 +40,7 @@ func (d *ArchiveData) Import(fileName string) error {
 	return nil
 }
 
+// d の内容を .bks 形式で fileName に書き出す。name/data の後に CRC32 を付加する。
 func (d ArchiveData) Export(fileName string) error {
 	var content []byte
 	var version_bin = make([]byte, 2)

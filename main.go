@@ -1,3 +1,4 @@
+// ディレクトリを暗号化・圧縮してバックアップし、復元するCLIツール。
 package main
 
 import (
@@ -8,6 +9,7 @@ import (
 	"bakashier/core"
 )
 
+// アプリケーションの動作モード（バックアップ/復元/バージョン表示）。
 type modeType string
 
 const (
@@ -16,6 +18,7 @@ const (
 	modeVersion modeType = "version"
 )
 
+// コマンドラインの使い方を標準出力に表示する。
 func usage() {
 	fmt.Println("Usage:")
 	fmt.Printf("  %s [--backup|-b|--restore|-r] [src_dir] [dist_dir] --password|-p [password]\n", constants.APP_NAME)
@@ -28,6 +31,8 @@ func usage() {
 	fmt.Println("  --version, -v  Show version")
 }
 
+// コマンドライン引数を解析し、モード・ソースディレクトリ・出力先・パスワードを返す。
+// エラー時は第5戻り値にエラーを返し、help/version の場合は特別なエラー文字列を使用する。
 func parseArgs(args []string) (modeType, string, string, string, error) {
 	var mode modeType
 	var srcDir string
@@ -89,6 +94,7 @@ func parseArgs(args []string) (modeType, string, string, string, error) {
 	return mode, srcDir, distDir, password, nil
 }
 
+// エントリポイント。引数解析後にバックアップまたは復元を実行する。
 func main() {
 	mode, srcDir, distDir, password, err := parseArgs(os.Args[1:])
 	if err != nil {

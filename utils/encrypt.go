@@ -11,7 +11,8 @@ import (
 	"golang.org/x/crypto/pbkdf2"
 )
 
-// EncryptBytesWithPassword: パスワードでbyte配列を暗号化する
+// パスワードから PBKDF2 で鍵を導出し、AES-GCM でバイト列を暗号化する。
+// 戻り値は salt(16) + nonce + ciphertext の形式。
 func EncryptBytesWithPassword(plainData []byte, password string) ([]byte, error) {
 	salt := make([]byte, 16)
 	if _, err := io.ReadFull(rand.Reader, salt); err != nil {
@@ -43,7 +44,7 @@ func EncryptBytesWithPassword(plainData []byte, password string) ([]byte, error)
 	return result, nil
 }
 
-// DecryptBytesWithPassword: パスワードでbyte配列を復号化する
+// EncryptBytesWithPassword で暗号化したデータを、同じパスワードで復号する。
 func DecryptBytesWithPassword(cipherData []byte, password string) ([]byte, error) {
 	if len(cipherData) < 16 {
 		return nil, errors.New("ciphertext too short (no salt)")

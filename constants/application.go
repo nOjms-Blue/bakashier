@@ -1,3 +1,4 @@
+// アプリケーション名やバージョンなど、共通定数を定義する。
 package constants
 
 const APP_NAME = "bakashier"

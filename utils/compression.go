@@ -6,7 +6,7 @@ import (
 	"io"
 )
 
-// byte配列をzlibで圧縮する
+// バイト配列を zlib で圧縮し、結果のバイト列を返す。
 func CompressBytes(data []byte) ([]byte, error) {
 	var b bytes.Buffer
 	w := zlib.NewWriter(&b)
@@ -20,7 +20,7 @@ func CompressBytes(data []byte) ([]byte, error) {
 	return b.Bytes(), nil
 }
 
-// zlibで圧縮されたbyte配列を展開する
+// zlib で圧縮されたバイト配列を展開して返す。
 func DecompressBytes(compressedData []byte) ([]byte, error) {
 	b := bytes.NewReader(compressedData)
 	r, err := zlib.NewReader(b)

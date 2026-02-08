@@ -11,12 +11,13 @@ import (
 	"bakashier/utils"
 )
 
-
+// ディスパッチャキューからメッセージを受け取り、ワーカーにジョブを配分する。
+// FIND_DIR でジョブを投入し、全ジョブが FINISH_JOB で完了すると各ワーカーに EXIT を送る。
 func backupDispatcher(workers int, dispatcherQueue <-chan dispatcherMessage, workerQueue chan<- workerMessage, wg *sync.WaitGroup) {
 	defer wg.Done()
-	
+
 	var untreated int = 0
-	for ;; {
+	for {
 		msg := <-dispatcherQueue
 		
 		switch msg.MsgType {
@@ -48,12 +49,16 @@ func backupDispatcher(workers int, dispatcherQueue <-chan dispatcherMessage, wor
 	}
 }
 
+// ワーカーキューからジョブを受け取り、ディレクトリを走査してファイルをアーカイブする。
+// 既存の _directory_.bks を読み、変更のないファイルはスキップする。ディレクトリは FIND_DIR で再投入する。
 func backupWorker(password string, dispatcherQueue chan<- dispatcherMessage, workerQueue <-chan workerMessage, wg *sync.WaitGroup) {
 	defer wg.Done()
-	
-	for ;; {
+
+	for {
 		queue := <-workerQueue
-		if (queue.MsgType == EXIT) { break }
+		if queue.MsgType == EXIT {
+			break
+		}
 		
 		var errHandler = func(prefix string, err error) {
 			dispatcherQueue <- dispatcherMessage{

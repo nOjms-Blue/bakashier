@@ -6,7 +6,7 @@ import (
 	"errors"
 )
 
-// ファイル名・ファイル内容・パスワードを受け取り、ArchiveData に変換する。
+// ファイル名・ファイル内容・パスワードを受け取り、圧縮・暗号化した ArchiveData に変換する。
 func ToArchiveData(filename string, content []byte, password string) (ArchiveData, error) {
 	if password == "" {
 		return ArchiveData{}, errors.New("password is required")
@@ -28,7 +28,7 @@ func ToArchiveData(filename string, content []byte, password string) (ArchiveDat
 	}, nil
 }
 
-// ArchiveData・パスワードを受け取り、ファイル名とファイル内容に戻す。
+// ArchiveData とパスワードを受け取り、復号・展開してファイル名とファイル内容に戻す。
 func FromArchiveData(archive ArchiveData, password string) (filename string, content []byte, err error) {
 	if password == "" {
 		return "", nil, errors.New("password is required")

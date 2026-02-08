@@ -4,6 +4,8 @@ import (
 	"sync"
 )
 
+// srcDir を暗号化・圧縮して distDir にバックアップする。
+// ディスパッチャ1つとワーカー4つを起動し、チャネルでジョブを分配する。
 func Backup(srcDir string, distDir string, password string) {
 	var wg sync.WaitGroup
 	dispatcherQueue := make(chan dispatcherMessage, 64)
@@ -28,6 +30,8 @@ func Backup(srcDir string, distDir string, password string) {
 	close(workerQueue)
 }
 
+// srcDir（バックアップ先）から distDir へ復元する。
+// ディスパッチャ1つとワーカー4つを起動し、チャネルでジョブを分配する。
 func Restore(srcDir string, distDir string, password string) {
 	var wg sync.WaitGroup
 	dispatcherQueue := make(chan dispatcherMessage, 64)

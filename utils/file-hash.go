@@ -1,11 +1,11 @@
 package utils
 
 import (
-	"hash/crc32"
 	"encoding/binary"
+	"hash/crc32"
 )
 
-// CRC32で[]byteをハッシュ化し、そのハッシュ値を[]byteで返す
+// データの CRC32(IEEE) を計算し、4バイト（BigEndian）で返す。
 func CRC32HashBytes(data []byte) []byte {
 	hash := crc32.ChecksumIEEE(data)
 	buf := make([]byte, 4)
