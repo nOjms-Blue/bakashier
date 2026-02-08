@@ -15,6 +15,11 @@ import (
 var ChunkSize uint64 = 16 * 1024 * 1024 // 16MB
 
 func ExportStreamArchive(srcFile string, destFile string, fileName string, password string, chunkSize uint64) error {
+	// ソースファイルのサイズを取得
+	fileInfo, err := os.Stat(srcFile)
+	if err != nil { return err }
+	srcFileSize := uint64(fileInfo.Size())
+	
 	// ソースファイルを開く
 	src, err := os.Open(srcFile)
 	if err != nil { return err }
@@ -43,11 +48,16 @@ func ExportStreamArchive(srcFile string, destFile string, fileName string, passw
 	dest.Write(encryptedName)
 	dest.Write(utils.CRC32HashBytes(encryptedName))
 	
+	var remainSize = srcFileSize
 	for {
+		if remainSize < chunkSize {
+			chunkSize = remainSize
+		}
 		chunk := make([]byte, chunkSize)
 		n, err := src.Read(chunk)
 		if err == io.EOF || n == 0 { break }
 		if err != nil { return err }
+		remainSize -= uint64(n)
 		
 		// CRC32 ハッシュを計算
 		chunkCRC := utils.CRC32HashBytes(chunk)
