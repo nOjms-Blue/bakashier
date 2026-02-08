@@ -22,12 +22,12 @@ func restoreDispatcher(workers int, queueSize int, dispatcherQueue <-chan dispat
 
 		switch msg.MsgType {
 		case FIND_DIR:
-			workerQueue <- workerMessage{
+			untreatedMessage = append(untreatedMessage, workerMessage{
 				MsgType: NEXT_JOB,
 				SrcDir:  msg.SrcDir,
 				DistDir: msg.DistDir,
 				Detail:  msg.Detail,
-			}
+			})
 			untreated++
 		case FINISH_JOB:
 			untreated--

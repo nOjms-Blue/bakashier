@@ -1,13 +1,14 @@
 package data
 
 import (
-	"bakashier/utils"
 	"bytes"
 	"encoding/binary"
 	"errors"
 	"io"
 	"os"
 	"path/filepath"
+	
+	"bakashier/utils"
 )
 
 
@@ -77,7 +78,7 @@ func ImportStreamArchive(archiveFile string, destDirectory string, password stri
 	defer archive.Close()
 	
 	// ヘッダを読み込む
-	header := make([]byte, 17)
+	header := make([]byte, 9)
 	_, err = archive.Read(header)
 	if err != nil { return err, "" }
 	if header[0] != byte('B') || header[1] != byte('K') || header[2] != byte('S') {
@@ -90,6 +91,7 @@ func ImportStreamArchive(archiveFile string, destDirectory string, password stri
 	// 名前情報の取得
 	nameLen := binary.BigEndian.Uint32(header[5:9])
 	nameBytes := make([]byte, nameLen)
+	nameHash := make([]byte, 4)
 	_, err = archive.Read(nameBytes)
 	if err != nil { return err, "" }
 	decryptedName, err := utils.DecryptBytesWithPassword(nameBytes, password)
@@ -97,6 +99,11 @@ func ImportStreamArchive(archiveFile string, destDirectory string, password stri
 	decompressedName, err := utils.DecompressBytes(decryptedName)
 	if err != nil { return err, "" }
 	name := string(decompressedName)
+	_, err = archive.Read(nameHash)
+	if err != nil { return err, "" }
+	if !bytes.Equal(nameHash, utils.CRC32HashBytes(nameBytes)) {
+		return errors.New("name hash mismatch"), ""
+	}
 	
 	// 書き出し先ファイルを開く
 	destFile := filepath.Join(destDirectory, name)
