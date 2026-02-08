@@ -113,7 +113,7 @@ func restoreWorker(password string, dispatcherQueue chan<- dispatcherMessage, wo
 						DistDir: realDir,
 						Detail:  "",
 					}
-					fmt.Printf("Successfully restored directory %s\n", realDir)
+					fmt.Printf("Successfully restored directory: %s -> %s\n", hiddenDir, realDir)
 				case data.File:
 					archiveFile := filepath.Join(queue.SrcDir, fmt.Sprintf("%s.bks", entry.HideName))
 					
@@ -124,7 +124,7 @@ func restoreWorker(password string, dispatcherQueue chan<- dispatcherMessage, wo
 					}
 					_ = os.Chtimes(realFile, time.Now(), entry.ModTime)
 					
-					fmt.Printf("Successfully restored %s -> %s\n", archiveFile, realFile)
+					fmt.Printf("Successfully restored: %s -> %s\n", filepath.Join(queue.SrcDir, fmt.Sprintf("%s.bks", entry.HideName)), realFile)
 				default:
 					errHandler("Unknown entry type", fmt.Errorf("%v", entry.Type))
 					return
