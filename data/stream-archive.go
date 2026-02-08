@@ -12,9 +12,9 @@ import (
 )
 
 
-const chunkSize = 16 * 1024 * 1024 // 16MB
+var ChunkSize uint64 = 16 * 1024 * 1024 // 16MB
 
-func ExportStreamArchive(srcFile string, destFile string, fileName string, password string) error {
+func ExportStreamArchive(srcFile string, destFile string, fileName string, password string, chunkSize uint64) error {
 	// ソースファイルを開く
 	src, err := os.Open(srcFile)
 	if err != nil { return err }

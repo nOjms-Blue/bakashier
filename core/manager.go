@@ -7,7 +7,7 @@ import (
 
 // srcDir を暗号化・圧縮して distDir にバックアップする。
 // ディスパッチャ1つとワーカー4つを起動し、チャネルでジョブを分配する。
-func Backup(srcDir string, distDir string, password string) {
+func Backup(srcDir string, distDir string, password string, chunkSize uint64) {
 	var wg sync.WaitGroup
 	var workers int = runtime.GOMAXPROCS(0)
 	var queueSize int = workers * 8
@@ -23,9 +23,9 @@ func Backup(srcDir string, distDir string, password string) {
 	}
 	
 	wg.Add(workers + 1)
-	go backupDispatcher(workers, queueSize, dispatcherQueue, workerQueue, &wg)
+	go backupDispatcher(workers, dispatcherQueue, workerQueue, &wg)
 	for i := 0; i < workers; i++ {
-		go backupWorker(password, dispatcherQueue, workerQueue, &wg)
+		go backupWorker(password, dispatcherQueue, workerQueue, &wg, chunkSize)
 	}
 	wg.Wait()
 	
@@ -51,7 +51,7 @@ func Restore(srcDir string, distDir string, password string) {
 	}
 	
 	wg.Add(workers + 1)
-	go restoreDispatcher(workers, queueSize, dispatcherQueue, workerQueue, &wg)
+	go restoreDispatcher(workers, dispatcherQueue, workerQueue, &wg)
 	for i := 0; i < workers; i++ {
 		go restoreWorker(password, dispatcherQueue, workerQueue, &wg)
 	}

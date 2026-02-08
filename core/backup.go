@@ -13,7 +13,7 @@ import (
 
 // ディスパッチャキューからメッセージを受け取り、ワーカーにジョブを配分する。
 // FIND_DIR でジョブを投入し、全ジョブが FINISH_JOB で完了すると各ワーカーに EXIT を送る。
-func backupDispatcher(workers int, queueSize int, dispatcherQueue <-chan dispatcherMessage, workerQueue chan<- workerMessage, wg *sync.WaitGroup) {
+func backupDispatcher(workers int, dispatcherQueue <-chan dispatcherMessage, workerQueue chan<- workerMessage, wg *sync.WaitGroup) {
 	defer wg.Done()
 	
 	var untreated int = 0
@@ -65,7 +65,7 @@ func backupDispatcher(workers int, queueSize int, dispatcherQueue <-chan dispatc
 
 // ワーカーキューからジョブを受け取り、ディレクトリを走査してファイルをアーカイブする。
 // 既存の _directory_.bks を読み、変更のないファイルはスキップする。ディレクトリは FIND_DIR で再投入する。
-func backupWorker(password string, dispatcherQueue chan<- dispatcherMessage, workerQueue <-chan workerMessage, wg *sync.WaitGroup) {
+func backupWorker(password string, dispatcherQueue chan<- dispatcherMessage, workerQueue <-chan workerMessage, wg *sync.WaitGroup, chunkSize uint64) {
 	defer wg.Done()
 	
 	for {
@@ -160,7 +160,7 @@ func backupWorker(password string, dispatcherQueue chan<- dispatcherMessage, wor
 					
 					srcFile := filepath.Join(queue.SrcDir, file.Name())
 					archiveFile := filepath.Join(queue.DistDir, fmt.Sprintf("%s.bks", hideName))
-					err = data.ExportStreamArchive(srcFile, archiveFile, file.Name(), password)
+					err = data.ExportStreamArchive(srcFile, archiveFile, file.Name(), password, chunkSize)
 					if err != nil {
 						errHandler("Failed to export stream archive", err)
 						return
