@@ -150,7 +150,7 @@ func backupWorker(password string, dispatcherQueue chan<- dispatcherMessage, wor
 						Detail: "",
 					}
 					
-					fmt.Printf("Successfully found directory: %s\n", filepath.Join(queue.SrcDir, file.Name()))
+					fmt.Printf("Found directory: %s\n", filepath.Join(queue.SrcDir, file.Name()))
 				} else {
 					fileInfo, err := file.Info()
 					if err != nil {
@@ -182,7 +182,7 @@ func backupWorker(password string, dispatcherQueue chan<- dispatcherMessage, wor
 						Size: uint64(fileInfo.Size()),
 						ModTime: fileInfo.ModTime(),
 					}
-					fmt.Printf("Successfully archived: %s -> %s\n", filepath.Join(queue.SrcDir, file.Name()), filepath.Join(queue.DistDir, hideName))
+					fmt.Printf("File archived: %s -> %s\n", filepath.Join(queue.SrcDir, file.Name()), filepath.Join(queue.DistDir, hideName))
 					
 					if limit.Size > 0 && limit.Wait > 0 {
 						processedSize += uint64(fileInfo.Size())
@@ -214,6 +214,8 @@ func backupWorker(password string, dispatcherQueue chan<- dispatcherMessage, wor
 				errHandler("Failed to export directory entries archive", err)
 				return
 			}
+			
+			fmt.Printf("Successfully directory archived: %s\n", queue.SrcDir)
 		}()
 		
 		dispatcherQueue <- dispatcherMessage{
