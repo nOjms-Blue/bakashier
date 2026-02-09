@@ -65,14 +65,13 @@ func backupDispatcher(workers int, dispatcherQueue <-chan dispatcherMessage, wor
 
 // ワーカーキューからジョブを受け取り、ディレクトリを走査してファイルをアーカイブする。
 // 既存の _directory_.bks を読み、変更のないファイルはスキップする。ディレクトリは FIND_DIR で再投入する。
-func backupWorker(password string, dispatcherQueue chan<- dispatcherMessage, workerQueue <-chan workerMessage, wg *sync.WaitGroup, chunkSize uint64) {
+func backupWorker(password string, dispatcherQueue chan<- dispatcherMessage, workerQueue <-chan workerMessage, wg *sync.WaitGroup, chunkSize uint64, limit Limit) {
 	defer wg.Done()
+	var processedSize uint64 = 0
 	
 	for {
 		queue := <-workerQueue
-		if queue.MsgType == EXIT {
-			break
-		}
+		if queue.MsgType == EXIT { break }
 		
 		var errHandler = func(prefix string, err error) {
 			dispatcherQueue <- dispatcherMessage{
@@ -99,6 +98,22 @@ func backupWorker(password string, dispatcherQueue chan<- dispatcherMessage, wor
 			nameMap := make(map[string]string)
 			newEntries := make(map[string]data.DirectoryEntry)
 			directoryEntryFile := filepath.Join(queue.DistDir, "_directory_.bks")
+			
+			// 既存の _directory_.bks が存在しない場合は、中断されたバックアップを削除する。
+			if _, err := os.Stat(directoryEntryFile); err != nil {
+				items, err := os.ReadDir(queue.DistDir)
+				if err == nil {
+					for _, item := range items {
+						if item.IsDir() {
+							os.RemoveAll(filepath.Join(queue.DistDir, item.Name()))
+						} else {
+							os.Remove(filepath.Join(queue.DistDir, item.Name()))
+						}
+					}
+				}
+			}
+			
+			// 既存の _directory_.bks からエントリ一覧を読み込む。
 			entries, err := loadDirectoryEntries(directoryEntryFile, password)
 			if err != nil {
 				errHandler("Failed to load directory entries", err)
@@ -118,13 +133,6 @@ func backupWorker(password string, dispatcherQueue chan<- dispatcherMessage, wor
 				nameMap[hideName] = file.Name()
 				
 				if file.IsDir() {
-					// ディレクトリを作成
-					err = os.MkdirAll(filepath.Join(queue.DistDir, hideName), 0755)
-					if err != nil {
-						errHandler("Failed to create directory", err)
-						return
-					}
-					
 					// ディレクトリエントリを追加
 					newEntries[hideName] = data.DirectoryEntry{
 						Type: data.Directory,
@@ -142,7 +150,7 @@ func backupWorker(password string, dispatcherQueue chan<- dispatcherMessage, wor
 						Detail: "",
 					}
 					
-					fmt.Printf("Successfully found directory: %s\n", filepath.Join(queue.SrcDir, file.Name()))
+					fmt.Printf("Found directory: %s\n", filepath.Join(queue.SrcDir, file.Name()))
 				} else {
 					fileInfo, err := file.Info()
 					if err != nil {
@@ -174,7 +182,15 @@ func backupWorker(password string, dispatcherQueue chan<- dispatcherMessage, wor
 						Size: uint64(fileInfo.Size()),
 						ModTime: fileInfo.ModTime(),
 					}
-					fmt.Printf("Successfully archived: %s -> %s\n", filepath.Join(queue.SrcDir, file.Name()), filepath.Join(queue.DistDir, hideName))
+					fmt.Printf("File archived: %s -> %s\n", filepath.Join(queue.SrcDir, file.Name()), filepath.Join(queue.DistDir, hideName))
+					
+					if limit.Size > 0 && limit.Wait > 0 {
+						processedSize += uint64(fileInfo.Size())
+						if limit.Size > 0 && processedSize >= limit.Size {
+							time.Sleep(time.Duration(limit.Wait) * time.Second)
+							processedSize = processedSize - limit.Size
+						}
+					}
 				}
 			}
 			
@@ -198,6 +214,8 @@ func backupWorker(password string, dispatcherQueue chan<- dispatcherMessage, wor
 				errHandler("Failed to export directory entries archive", err)
 				return
 			}
+			
+			fmt.Printf("Successfully directory archived: %s\n", queue.SrcDir)
 		}()
 		
 		dispatcherQueue <- dispatcherMessage{

@@ -2,4 +2,4 @@
 package constants
 
 const APP_NAME = "bakashier"
-const APP_VERSION = "0.1.0"
+const APP_VERSION = "0.1.1"

@@ -64,14 +64,14 @@ func restoreDispatcher(workers int, dispatcherQueue <-chan dispatcherMessage, wo
 
 // ワーカーキューからジョブを受け取り、_directory_.bks と .bks ファイルから復元する。
 // ディレクトリエントリに従い、隠し名の .bks を復号して実名で distDir に書き出す。
-func restoreWorker(password string, dispatcherQueue chan<- dispatcherMessage, workerQueue <-chan workerMessage, wg *sync.WaitGroup) {
+func restoreWorker(password string, dispatcherQueue chan<- dispatcherMessage, workerQueue <-chan workerMessage, wg *sync.WaitGroup, limit Limit) {
 	defer wg.Done()
-
+	
+	var processedSize uint64 = 0
+	
 	for {
 		queue := <-workerQueue
-		if queue.MsgType == EXIT {
-			break
-		}
+		if queue.MsgType == EXIT { break }
 		
 		var errHandler = func(prefix string, err error) {
 			dispatcherQueue <- dispatcherMessage{
@@ -113,7 +113,7 @@ func restoreWorker(password string, dispatcherQueue chan<- dispatcherMessage, wo
 						DistDir: realDir,
 						Detail:  "",
 					}
-					fmt.Printf("Successfully restored directory: %s -> %s\n", hiddenDir, realDir)
+					fmt.Printf("Found directory: %s -> %s\n", hiddenDir, realDir)
 				case data.File:
 					archiveFile := filepath.Join(queue.SrcDir, fmt.Sprintf("%s.bks", entry.HideName))
 					
@@ -124,12 +124,22 @@ func restoreWorker(password string, dispatcherQueue chan<- dispatcherMessage, wo
 					}
 					_ = os.Chtimes(realFile, time.Now(), entry.ModTime)
 					
-					fmt.Printf("Successfully restored: %s -> %s\n", filepath.Join(queue.SrcDir, fmt.Sprintf("%s.bks", entry.HideName)), realFile)
+					fmt.Printf("File restored: %s -> %s\n", filepath.Join(queue.SrcDir, fmt.Sprintf("%s.bks", entry.HideName)), realFile)
+					
+					if limit.Size > 0 && limit.Wait > 0 {
+						processedSize += uint64(entry.Size)
+						if limit.Size > 0 && processedSize >= limit.Size {
+							time.Sleep(time.Duration(limit.Wait) * time.Second)
+							processedSize = processedSize - limit.Size
+						}
+					}
 				default:
 					errHandler("Unknown entry type", fmt.Errorf("%v", entry.Type))
 					return
 				}
 			}
+			
+			fmt.Printf("Successfully directory restored: %s\n", queue.SrcDir)
 		}()
 		
 		dispatcherQueue <- dispatcherMessage{
