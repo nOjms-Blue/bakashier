@@ -69,7 +69,7 @@ func ParseArgs(args []string) (ParsedArgs, error) {
 			if err != nil || parsed == 0 {
 				return ParsedArgs{}, fmt.Errorf("limit size must be a positive integer (MiB)")
 			}
-			limitSizeMiB = parsed
+			limitSizeMiB = parsed * 1024 * 1024
 			i++
 		case "--limit-wait", "-lw":
 			if i+1 >= len(args) {
