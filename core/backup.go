@@ -99,6 +99,22 @@ func backupWorker(password string, dispatcherQueue chan<- dispatcherMessage, wor
 			nameMap := make(map[string]string)
 			newEntries := make(map[string]data.DirectoryEntry)
 			directoryEntryFile := filepath.Join(queue.DistDir, "_directory_.bks")
+			
+			// 既存の _directory_.bks が存在しない場合は、中断されたバックアップを削除する。
+			if _, err := os.Stat(directoryEntryFile); err != nil {
+				items, err := os.ReadDir(queue.DistDir)
+				if err == nil {
+					for _, item := range items {
+						if item.IsDir() {
+							os.RemoveAll(filepath.Join(queue.DistDir, item.Name()))
+						} else {
+							os.Remove(filepath.Join(queue.DistDir, item.Name()))
+						}
+					}
+				}
+			}
+			
+			// 既存の _directory_.bks からエントリ一覧を読み込む。
 			entries, err := loadDirectoryEntries(directoryEntryFile, password)
 			if err != nil {
 				errHandler("Failed to load directory entries", err)
@@ -118,13 +134,6 @@ func backupWorker(password string, dispatcherQueue chan<- dispatcherMessage, wor
 				nameMap[hideName] = file.Name()
 				
 				if file.IsDir() {
-					// ディレクトリを作成
-					err = os.MkdirAll(filepath.Join(queue.DistDir, hideName), 0755)
-					if err != nil {
-						errHandler("Failed to create directory", err)
-						return
-					}
-					
 					// ディレクトリエントリを追加
 					newEntries[hideName] = data.DirectoryEntry{
 						Type: data.Directory,
