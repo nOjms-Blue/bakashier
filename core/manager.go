@@ -1,15 +1,19 @@
 package core
 
 import (
+	"runtime"
 	"sync"
 )
 
 // srcDir を暗号化・圧縮して distDir にバックアップする。
 // ディスパッチャ1つとワーカー4つを起動し、チャネルでジョブを分配する。
-func Backup(srcDir string, distDir string, password string) {
+func Backup(srcDir string, distDir string, password string, chunkSize uint64) {
 	var wg sync.WaitGroup
-	dispatcherQueue := make(chan dispatcherMessage, 64)
-	workerQueue := make(chan workerMessage, 64)
+	var workers int = runtime.GOMAXPROCS(0)
+	var queueSize int = workers * 8
+	
+	dispatcherQueue := make(chan dispatcherMessage, queueSize)
+	workerQueue := make(chan workerMessage, queueSize)
 	
 	dispatcherQueue <- dispatcherMessage{
 		MsgType: FIND_DIR,
@@ -17,12 +21,11 @@ func Backup(srcDir string, distDir string, password string) {
 		DistDir: distDir,
 		Detail: "",
 	}
-	var workers int = 4
 	
 	wg.Add(workers + 1)
 	go backupDispatcher(workers, dispatcherQueue, workerQueue, &wg)
 	for i := 0; i < workers; i++ {
-		go backupWorker(password, dispatcherQueue, workerQueue, &wg)
+		go backupWorker(password, dispatcherQueue, workerQueue, &wg, chunkSize)
 	}
 	wg.Wait()
 	
@@ -34,8 +37,11 @@ func Backup(srcDir string, distDir string, password string) {
 // ディスパッチャ1つとワーカー4つを起動し、チャネルでジョブを分配する。
 func Restore(srcDir string, distDir string, password string) {
 	var wg sync.WaitGroup
-	dispatcherQueue := make(chan dispatcherMessage, 64)
-	workerQueue := make(chan workerMessage, 64)
+	var workers int = runtime.GOMAXPROCS(0)
+	var queueSize int = workers * 8
+	
+	dispatcherQueue := make(chan dispatcherMessage, queueSize)
+	workerQueue := make(chan workerMessage, queueSize)
 	
 	dispatcherQueue <- dispatcherMessage{
 		MsgType: FIND_DIR,
@@ -43,7 +49,6 @@ func Restore(srcDir string, distDir string, password string) {
 		DistDir: distDir,
 		Detail:  "",
 	}
-	var workers int = 4
 	
 	wg.Add(workers + 1)
 	go restoreDispatcher(workers, dispatcherQueue, workerQueue, &wg)

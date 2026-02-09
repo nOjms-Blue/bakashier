@@ -12,5 +12,6 @@
 go.work
 go.work.sum
 
-# backup files
+# backup & restore files
 backup/
+restore/

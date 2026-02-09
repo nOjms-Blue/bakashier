@@ -15,19 +15,20 @@ import (
 // FIND_DIR でジョブを投入し、全ジョブが FINISH_JOB で完了すると各ワーカーに EXIT を送る。
 func backupDispatcher(workers int, dispatcherQueue <-chan dispatcherMessage, workerQueue chan<- workerMessage, wg *sync.WaitGroup) {
 	defer wg.Done()
-
+	
 	var untreated int = 0
+	var untreatedMessage = []workerMessage{}
 	for {
 		msg := <-dispatcherQueue
 		
 		switch msg.MsgType {
 		case FIND_DIR:
-			workerQueue <- workerMessage{
+			untreatedMessage = append(untreatedMessage, workerMessage{
 				MsgType: NEXT_JOB,
 				SrcDir: msg.SrcDir,
 				DistDir: msg.DistDir,
 				Detail: msg.Detail,
-			}
+			})
 			untreated++
 		case FINISH_JOB:
 			untreated--
@@ -46,14 +47,27 @@ func backupDispatcher(workers int, dispatcherQueue <-chan dispatcherMessage, wor
 			}
 			break
 		}
+		
+		for {
+			if len(dispatcherQueue) != 0 { break }
+			if len(untreatedMessage) == 0 { break }
+			
+			msg := untreatedMessage[0]
+			select {
+				case workerQueue <- msg:
+					untreatedMessage = untreatedMessage[1:]
+				default:
+					time.Sleep(10 * time.Millisecond)
+			}
+		}
 	}
 }
 
 // ワーカーキューからジョブを受け取り、ディレクトリを走査してファイルをアーカイブする。
 // 既存の _directory_.bks を読み、変更のないファイルはスキップする。ディレクトリは FIND_DIR で再投入する。
-func backupWorker(password string, dispatcherQueue chan<- dispatcherMessage, workerQueue <-chan workerMessage, wg *sync.WaitGroup) {
+func backupWorker(password string, dispatcherQueue chan<- dispatcherMessage, workerQueue <-chan workerMessage, wg *sync.WaitGroup, chunkSize uint64) {
 	defer wg.Done()
-
+	
 	for {
 		queue := <-workerQueue
 		if queue.MsgType == EXIT {
@@ -128,7 +142,7 @@ func backupWorker(password string, dispatcherQueue chan<- dispatcherMessage, wor
 						Detail: "",
 					}
 					
-					fmt.Printf("Successfully found directory %s\n", file.Name())
+					fmt.Printf("Successfully found directory: %s\n", filepath.Join(queue.SrcDir, file.Name()))
 				} else {
 					fileInfo, err := file.Info()
 					if err != nil {
@@ -144,24 +158,11 @@ func backupWorker(password string, dispatcherQueue chan<- dispatcherMessage, wor
 						}
 					}
 					
-					// ファイルを読み込む
-					content, err := os.ReadFile(filepath.Join(queue.SrcDir, file.Name()))
+					srcFile := filepath.Join(queue.SrcDir, file.Name())
+					archiveFile := filepath.Join(queue.DistDir, fmt.Sprintf("%s.bks", hideName))
+					err = data.ExportStreamArchive(srcFile, archiveFile, file.Name(), password, chunkSize)
 					if err != nil {
-						errHandler("Failed to read file", err)
-						return
-					}
-					
-					// アーカイブデータを作成
-					archive, err := data.ToArchiveData(file.Name(), content, password)
-					if err != nil {
-						errHandler("Failed to create archive data", err)
-						return
-					}
-					
-					// アーカイブデータを保存
-					err = archive.Export(filepath.Join(queue.DistDir, fmt.Sprintf("%s.bks", hideName)))
-					if err != nil {
-						errHandler("Failed to export archive", err)
+						errHandler("Failed to export stream archive", err)
 						return
 					}
 					
@@ -173,7 +174,7 @@ func backupWorker(password string, dispatcherQueue chan<- dispatcherMessage, wor
 						Size: uint64(fileInfo.Size()),
 						ModTime: fileInfo.ModTime(),
 					}
-					fmt.Printf("Successfully archived %s -> %s\n", file.Name(), filepath.Join(queue.DistDir, hideName))
+					fmt.Printf("Successfully archived: %s -> %s\n", filepath.Join(queue.SrcDir, file.Name()), filepath.Join(queue.DistDir, hideName))
 				}
 			}
 			

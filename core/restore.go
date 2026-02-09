@@ -16,17 +16,18 @@ func restoreDispatcher(workers int, dispatcherQueue <-chan dispatcherMessage, wo
 	defer wg.Done()
 
 	var untreated int = 0
+	var untreatedMessage = []workerMessage{}
 	for {
 		msg := <-dispatcherQueue
 
 		switch msg.MsgType {
 		case FIND_DIR:
-			workerQueue <- workerMessage{
+			untreatedMessage = append(untreatedMessage, workerMessage{
 				MsgType: NEXT_JOB,
 				SrcDir:  msg.SrcDir,
 				DistDir: msg.DistDir,
 				Detail:  msg.Detail,
-			}
+			})
 			untreated++
 		case FINISH_JOB:
 			untreated--
@@ -44,6 +45,19 @@ func restoreDispatcher(workers int, dispatcherQueue <-chan dispatcherMessage, wo
 				}
 			}
 			break
+		}
+		
+		for {
+			if len(dispatcherQueue) != 0 { break }
+			if len(untreatedMessage) == 0 { break }
+			
+			msg := untreatedMessage[0]
+			select {
+				case workerQueue <- msg:
+					untreatedMessage = untreatedMessage[1:]
+				default:
+					time.Sleep(10 * time.Millisecond)
+			}
 		}
 	}
 }
@@ -99,29 +113,18 @@ func restoreWorker(password string, dispatcherQueue chan<- dispatcherMessage, wo
 						DistDir: realDir,
 						Detail:  "",
 					}
-					fmt.Printf("Successfully restored directory %s\n", realDir)
+					fmt.Printf("Successfully restored directory: %s -> %s\n", hiddenDir, realDir)
 				case data.File:
 					archiveFile := filepath.Join(queue.SrcDir, fmt.Sprintf("%s.bks", entry.HideName))
-					var archive data.ArchiveData
-					err = archive.Import(archiveFile)
-					if err != nil {
-						errHandler("Failed to import archive", err)
-						return
-					}
-					_, content, err := data.FromArchiveData(archive, password)
-					if err != nil {
-						errHandler("Failed to decode archive", err)
-						return
-					}
 					
-					realFile := filepath.Join(queue.DistDir, entry.RealName)
-					err = os.WriteFile(realFile, content, 0644)
+					err, realFile := data.ImportStreamArchive(archiveFile, queue.DistDir, password)
 					if err != nil {
-						errHandler("Failed to write file", err)
+						errHandler("Failed to import stream archive", err)
 						return
 					}
 					_ = os.Chtimes(realFile, time.Now(), entry.ModTime)
-					fmt.Printf("Successfully restored %s -> %s\n", archiveFile, realFile)
+					
+					fmt.Printf("Successfully restored: %s -> %s\n", filepath.Join(queue.SrcDir, fmt.Sprintf("%s.bks", entry.HideName)), realFile)
 				default:
 					errHandler("Unknown entry type", fmt.Errorf("%v", entry.Type))
 					return
