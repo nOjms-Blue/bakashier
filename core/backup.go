@@ -65,14 +65,13 @@ func backupDispatcher(workers int, dispatcherQueue <-chan dispatcherMessage, wor
 
 // ワーカーキューからジョブを受け取り、ディレクトリを走査してファイルをアーカイブする。
 // 既存の _directory_.bks を読み、変更のないファイルはスキップする。ディレクトリは FIND_DIR で再投入する。
-func backupWorker(password string, dispatcherQueue chan<- dispatcherMessage, workerQueue <-chan workerMessage, wg *sync.WaitGroup, chunkSize uint64) {
+func backupWorker(password string, dispatcherQueue chan<- dispatcherMessage, workerQueue <-chan workerMessage, wg *sync.WaitGroup, chunkSize uint64, limit Limit) {
 	defer wg.Done()
+	var processedSize uint64 = 0
 	
 	for {
 		queue := <-workerQueue
-		if queue.MsgType == EXIT {
-			break
-		}
+		if queue.MsgType == EXIT { break }
 		
 		var errHandler = func(prefix string, err error) {
 			dispatcherQueue <- dispatcherMessage{
@@ -184,6 +183,14 @@ func backupWorker(password string, dispatcherQueue chan<- dispatcherMessage, wor
 						ModTime: fileInfo.ModTime(),
 					}
 					fmt.Printf("Successfully archived: %s -> %s\n", filepath.Join(queue.SrcDir, file.Name()), filepath.Join(queue.DistDir, hideName))
+					
+					if limit.Size > 0 && limit.Wait > 0 {
+						processedSize += uint64(fileInfo.Size())
+						if limit.Size > 0 && processedSize >= limit.Size {
+							time.Sleep(time.Duration(limit.Wait) * time.Second)
+							processedSize = processedSize - limit.Size
+						}
+					}
 				}
 			}
 			

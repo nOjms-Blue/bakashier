@@ -19,11 +19,13 @@ func main() {
 		os.Exit(1)
 	}
 	
+	limit := core.Limit{Size: args.LimitSize, Wait: args.LimitWait}
+	
 	switch args.Mode {
 	case cli.ModeBackup:
-		core.Backup(args.SrcDir, args.DistDir, args.Password, args.ChunkSize)
+		core.Backup(args.SrcDir, args.DistDir, args.Password, args.ChunkSize, limit)
 	case cli.ModeRestore:
-		core.Restore(args.SrcDir, args.DistDir, args.Password)
+		core.Restore(args.SrcDir, args.DistDir, args.Password, limit)
 	case cli.ModeVersion:
 		fmt.Println(constants.APP_VERSION)
 	case cli.ModeHelp:

@@ -16,7 +16,8 @@ func ParseArgs(args []string) (ParsedArgs, error) {
 	var distDir string
 	var password string
 	var chunkSizeMiB uint64 = uint64(0) // 0 = 未指定（デフォルト使用）
-	
+	var limitSizeMiB uint64 = uint64(0) // 0 = 未指定（デフォルト使用）
+	var limitWaitSec uint64 = uint64(0) // 0 = 未指定（デフォルト使用）
 	positional := make([]string, 0, 2)
 	
 	for i := 0; i < len(args); i++ {
@@ -55,6 +56,34 @@ func ParseArgs(args []string) (ParsedArgs, error) {
 				return ParsedArgs{}, fmt.Errorf("chunk size must be a positive integer (MiB)")
 			}
 			chunkSizeMiB = parsed
+			i++
+		case "--limit-size", "-ls":
+			if i+1 >= len(args) {
+				return ParsedArgs{}, fmt.Errorf("limit size value is required")
+			}
+			limitSizeArg := args[i+1]
+			if len(limitSizeArg) == 0 || limitSizeArg[0] == '-' {
+				return ParsedArgs{}, fmt.Errorf("limit size value is required")
+			}
+			parsed, err := strconv.ParseUint(limitSizeArg, 10, 64)
+			if err != nil || parsed == 0 {
+				return ParsedArgs{}, fmt.Errorf("limit size must be a positive integer (MiB)")
+			}
+			limitSizeMiB = parsed
+			i++
+		case "--limit-wait", "-lw":
+			if i+1 >= len(args) {
+				return ParsedArgs{}, fmt.Errorf("limit wait value is required")
+			}
+			limitWaitArg := args[i+1]
+			if len(limitWaitArg) == 0 || limitWaitArg[0] == '-' {
+				return ParsedArgs{}, fmt.Errorf("limit wait value is required")
+			}
+			parsed, err := strconv.ParseUint(limitWaitArg, 10, 64)
+			if err != nil || parsed == 0 {
+				return ParsedArgs{}, fmt.Errorf("limit wait must be a positive integer (seconds)")
+			}
+			limitWaitSec = parsed
 			i++
 		case "--help", "-h":
 			return ParsedArgs{Mode: ModeHelp}, nil
@@ -97,5 +126,7 @@ func ParseArgs(args []string) (ParsedArgs, error) {
 		DistDir:   distDir,
 		Password:  password,
 		ChunkSize: chunkSize,
+		LimitSize: limitSizeMiB,
+		LimitWait: limitWaitSec,
 	}, nil
 }

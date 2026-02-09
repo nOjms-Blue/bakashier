@@ -18,4 +18,6 @@ type ParsedArgs struct {
 	DistDir   string
 	Password  string
 	ChunkSize uint64
+	LimitSize uint64
+	LimitWait uint64
 }
