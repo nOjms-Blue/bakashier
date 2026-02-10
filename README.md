@@ -19,6 +19,9 @@ bakashier [--help|-h|--version|-v]
 - `--backup`, `-b`: Run backup
 - `--restore`, `-r`: Run restore
 - `--password`, `-p`: Password (required)
+- `--chunk`, `-c`: Chunk size in MiB for backup (default: 16)
+- `--limit-size`, `-ls`: Limit size in MiB for backup (default: 0 = disabled)
+- `--limit-wait`, `-lw`: Limit wait in seconds for backup (default: 0 = disabled)
 - `--help`, `-h`: Show help
 - `--version`, `-v`: Show version
 
@@ -27,6 +30,7 @@ bakashier [--help|-h|--version|-v]
 - `--backup` and `--restore` are mutually exclusive.
 - Both `src_dir` and `dist_dir` are required.
 - `--password` is required.
+- `--chunk`, `--limit-size`, and `--limit-wait` require positive integers.
 
 ### Examples
 

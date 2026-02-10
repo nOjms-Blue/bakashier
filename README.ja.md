@@ -19,6 +19,9 @@ bakashier [--help|-h|--version|-v]
 - `--backup`, `-b`: バックアップを実行
 - `--restore`, `-r`: リストアを実行
 - `--password`, `-p`: パスワード（必須）
+- `--chunk`, `-c`: バックアップ時のチャンクサイズ（MiB、デフォルト: 16）
+- `--limit-size`, `-ls`: バックアップ時のサイズ制限（MiB、デフォルト: 0 = 無効）
+- `--limit-wait`, `-lw`: バックアップ時の待機時間制限（秒、デフォルト: 0 = 無効）
 - `--help`, `-h`: ヘルプ表示
 - `--version`, `-v`: バージョン表示
 
@@ -27,6 +30,7 @@ bakashier [--help|-h|--version|-v]
 - `--backup` と `--restore` は同時指定できません。
 - `src_dir` と `dist_dir` は必須です。
 - `--password` は必須です（省略不可）。
+- `--chunk`、`--limit-size`、`--limit-wait` は正の整数を指定してください。
 
 ### 実行例
 
