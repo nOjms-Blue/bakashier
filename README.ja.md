@@ -5,6 +5,13 @@
 `bakashier` は、ディレクトリをバックアップ/リストアするための CLI ツールです。  
 バックアップデータは bakashier 独自形式の `.bks` で保存され、圧縮とパスワード暗号化が行われます。
 
+## 主な機能
+
+- ディレクトリのバックアップ/リストアを 1 つの CLI で実行
+- バックアップ時に変更のないファイルをスキップ
+- パスワード暗号化と圧縮によるアーカイブ保護
+- `--limit-size` と `--limit-wait` による処理制限
+
 ## 使い方
 
 ### コマンド形式
@@ -29,6 +36,7 @@ bakashier [--help|-h|--version|-v]
 
 - `--backup` と `--restore` は同時指定できません。
 - `src_dir` と `dist_dir` は必須です。
+- `src_dir` と `dist_dir` は親子ディレクトリ関係にできません。
 - `--password` は必須です（省略不可）。
 - `--chunk`、`--limit-size`、`--limit-wait` は正の整数を指定してください。
 
@@ -54,7 +62,7 @@ bakashier --version
 ### Linux / macOS
 
 ```bash
-sh build.sh
+sh scripts/build.sh
 ```
 
 または:
@@ -66,7 +74,7 @@ go build -o bakashier main.go
 ### Windows
 
 ```bat
-build.bat
+scripts\build.bat
 ```
 
 または:
@@ -74,6 +82,28 @@ build.bat
 ```powershell
 go build -o bakashier.exe main.go
 ```
+
+## インストール
+
+### Linux / macOS
+
+```bash
+sh scripts/install.sh
+```
+
+バイナリの配置先:
+
+- `${XDG_DATA_HOME:-$HOME/.local/share}/bakashier/bakashier`
+
+### Windows
+
+```bat
+scripts\install.bat
+```
+
+バイナリの配置先:
+
+- `%LOCALAPPDATA%\bakashier\bakashier.exe`
 
 ## 使用している OSS ライブラリ
 
