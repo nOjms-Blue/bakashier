@@ -119,7 +119,9 @@ func backupWorker(password string, dispatcherQueue chan<- dispatcherMessage, wor
 				errHandler("Failed to load directory entries", err)
 				return
 			}
+			isExistEntries := len(entries) > 0
 			
+			// バックアップの実行
 			for _, file := range files {
 				hideName := utils.GenerateUniqueRandomName(nameMap)
 				entry := data.DirectoryEntry{ Type: data.Unknown }
@@ -182,13 +184,28 @@ func backupWorker(password string, dispatcherQueue chan<- dispatcherMessage, wor
 						Size: uint64(fileInfo.Size()),
 						ModTime: fileInfo.ModTime(),
 					}
-					fmt.Printf("File archived: %s -> %s\n", filepath.Join(queue.SrcDir, file.Name()), filepath.Join(queue.DistDir, hideName))
+					fmt.Printf("File archived: %s -> %s\n", filepath.Join(queue.SrcDir, file.Name()), filepath.Join(queue.DistDir, fmt.Sprintf("%s.bks", hideName)))
 					
 					if limit.Size > 0 && limit.Wait > 0 {
 						processedSize += uint64(fileInfo.Size())
 						if limit.Size > 0 && processedSize >= limit.Size {
 							time.Sleep(time.Duration(limit.Wait) * time.Second)
 							processedSize = processedSize - limit.Size
+						}
+					}
+				}
+			}
+			
+			// 既存のエントリから削除されたファイルを削除する。
+			if isExistEntries {
+				for _, entry := range entries {
+					if _, ok := newEntries[entry.HideName]; !ok {
+						if entry.Type == data.File {
+							os.Remove(filepath.Join(queue.DistDir, fmt.Sprintf("%s.bks", entry.HideName)))
+							fmt.Printf("File deleted: %s\n", filepath.Join(queue.DistDir, fmt.Sprintf("%s.bks", entry.HideName)))
+						} else {
+							os.RemoveAll(filepath.Join(queue.DistDir, entry.HideName))
+							fmt.Printf("Directory deleted: %s\n", filepath.Join(queue.DistDir, entry.HideName))
 						}
 					}
 				}
