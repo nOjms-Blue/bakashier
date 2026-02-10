@@ -200,8 +200,13 @@ func backupWorker(password string, dispatcherQueue chan<- dispatcherMessage, wor
 			if isExistEntries {
 				for _, entry := range entries {
 					if _, ok := newEntries[entry.HideName]; !ok {
-						os.Remove(filepath.Join(queue.DistDir, fmt.Sprintf("%s.bks", entry.HideName)))
-						fmt.Printf("File deleted: %s\n", filepath.Join(queue.DistDir, fmt.Sprintf("%s.bks", entry.HideName)))
+						if entry.Type == data.File {
+							os.Remove(filepath.Join(queue.DistDir, fmt.Sprintf("%s.bks", entry.HideName)))
+							fmt.Printf("File deleted: %s\n", filepath.Join(queue.DistDir, fmt.Sprintf("%s.bks", entry.HideName)))
+						} else {
+							os.RemoveAll(filepath.Join(queue.DistDir, entry.HideName))
+							fmt.Printf("Directory deleted: %s\n", filepath.Join(queue.DistDir, entry.HideName))
+						}
 					}
 				}
 			}
