@@ -2,11 +2,43 @@ package cli
 
 import (
 	"fmt"
+	"path/filepath"
 	"strconv"
+	"strings"
 	
 	"bakashier/data"
 )
 
+
+// 親ディレクトリが子ディレクトリのサブパスになっているかを判定する。
+func isSubPath(parent string, child string) bool {
+	if strings.EqualFold(parent, child) {
+		return true
+	}
+	sep := string(filepath.Separator)
+	parentWithSep := parent
+	if !strings.HasSuffix(parentWithSep, sep) {
+		parentWithSep += sep
+	}
+	return strings.HasPrefix(strings.ToLower(child), strings.ToLower(parentWithSep))
+}
+
+// ソースディレクトリと出力先ディレクトリが親子関係になっているかを判定する。
+func isParentChildDirectory(pathA string, pathB string) (bool, error) {
+	absA, err := filepath.Abs(pathA)
+	if err != nil {
+		return false, fmt.Errorf("failed to resolve src_dir: %w", err)
+	}
+	absB, err := filepath.Abs(pathB)
+	if err != nil {
+		return false, fmt.Errorf("failed to resolve dist_dir: %w", err)
+	}
+	
+	cleanA := filepath.Clean(absA)
+	cleanB := filepath.Clean(absB)
+	
+	return isSubPath(cleanA, cleanB) || isSubPath(cleanB, cleanA), nil
+}
 
 // コマンドライン引数を解析し、モード・ソースディレクトリ・出力先・パスワード・チャンクサイズを返す。
 // エラー時は第6戻り値にエラーを返し、help/version の場合は特別なエラー文字列を使用する。
@@ -20,6 +52,7 @@ func ParseArgs(args []string) (ParsedArgs, error) {
 	var limitWaitSec uint64 = uint64(0) // 0 = 未指定（デフォルト使用）
 	positional := make([]string, 0, 2)
 	
+	// 引数を解析する。
 	for i := 0; i < len(args); i++ {
 		arg := args[i]
 		switch arg {
@@ -96,7 +129,8 @@ func ParseArgs(args []string) (ParsedArgs, error) {
 			positional = append(positional, arg)
 		}
 	}
-
+	
+	// 必須項目が不足している場合はエラーを返す。
 	if mode == "" {
 		return ParsedArgs{}, fmt.Errorf("backup or restore mode is required")
 	}
@@ -109,17 +143,31 @@ func ParseArgs(args []string) (ParsedArgs, error) {
 	if len(positional) > 2 {
 		return ParsedArgs{}, fmt.Errorf("too many positional arguments")
 	}
-
+	
+	// ソースディレクトリと出力先ディレクトリを設定する。
 	srcDir = positional[0]
 	distDir = positional[1]
-
+	
+	// ソースディレクトリと出力先ディレクトリが親子関係になっている場合はエラーを返す。
+	if mode == ModeBackup || mode == ModeRestore {
+		invalid, err := isParentChildDirectory(srcDir, distDir)
+		if err != nil {
+			return ParsedArgs{}, err
+		}
+		if invalid {
+			return ParsedArgs{}, fmt.Errorf("src_dir and dist_dir cannot be parent-child directories")
+		}
+	}
+	
+	// チャンクサイズを設定する。
 	chunkSize := data.ChunkSize
 	if chunkSizeMiB > 0 {
 		chunkSize = chunkSizeMiB * 1024 * 1024
 	} else {
 		chunkSize = data.ChunkSize
 	}
-
+	
+	// 解析結果を返す。
 	return ParsedArgs{
 		Mode:      mode,
 		SrcDir:    srcDir,

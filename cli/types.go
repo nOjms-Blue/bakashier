@@ -3,7 +3,6 @@ package cli
 
 // アプリケーションの動作モード（バックアップ/復元/バージョン表示）。
 type ModeType string
-
 const (
 	ModeBackup  ModeType = "backup"
 	ModeRestore ModeType = "restore"
