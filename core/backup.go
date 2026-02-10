@@ -119,7 +119,9 @@ func backupWorker(password string, dispatcherQueue chan<- dispatcherMessage, wor
 				errHandler("Failed to load directory entries", err)
 				return
 			}
+			isExistEntries := len(entries) > 0
 			
+			// バックアップの実行
 			for _, file := range files {
 				hideName := utils.GenerateUniqueRandomName(nameMap)
 				entry := data.DirectoryEntry{ Type: data.Unknown }
@@ -190,6 +192,16 @@ func backupWorker(password string, dispatcherQueue chan<- dispatcherMessage, wor
 							time.Sleep(time.Duration(limit.Wait) * time.Second)
 							processedSize = processedSize - limit.Size
 						}
+					}
+				}
+			}
+			
+			// 既存のエントリから削除されたファイルを削除する。
+			if isExistEntries {
+				for _, entry := range entries {
+					if _, ok := newEntries[entry.HideName]; !ok {
+						os.Remove(filepath.Join(queue.DistDir, fmt.Sprintf("%s.bks", entry.HideName)))
+						fmt.Printf("File deleted: %s\n", filepath.Join(queue.DistDir, fmt.Sprintf("%s.bks", entry.HideName)))
 					}
 				}
 			}
