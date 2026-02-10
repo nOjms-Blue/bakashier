@@ -182,7 +182,7 @@ func backupWorker(password string, dispatcherQueue chan<- dispatcherMessage, wor
 						Size: uint64(fileInfo.Size()),
 						ModTime: fileInfo.ModTime(),
 					}
-					fmt.Printf("File archived: %s -> %s\n", filepath.Join(queue.SrcDir, file.Name()), filepath.Join(queue.DistDir, hideName))
+					fmt.Printf("File archived: %s -> %s\n", filepath.Join(queue.SrcDir, file.Name()), filepath.Join(queue.DistDir, fmt.Sprintf("%s.bks", hideName)))
 					
 					if limit.Size > 0 && limit.Wait > 0 {
 						processedSize += uint64(fileInfo.Size())
