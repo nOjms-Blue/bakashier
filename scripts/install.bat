@@ -4,8 +4,11 @@ REM Build bakashier.exe
 cd %~dp0
 cd ..
 CALL scripts\build.bat
-IF ERRORLEVEL 1 EXIT /B %ERRORLEVEL%
 @ECHO OFF
+IF %BUILD_ERROR% EQU 1 (
+	@ECHO ON
+	EXIT /B 1
+)
 
 REM Copy bakashier.exe
 IF NOT EXIST "%LOCALAPPDATA%\bakashier" (
