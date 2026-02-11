@@ -1,5 +1,9 @@
 {
 	"ignorePaths": ["go.mod"],
-	"ignoreWords": [],
+	"ignoreWords": [
+		"CDPATH",
+		"ERRORLEVEL",
+		"LOCALAPPDATA",
+	],
 	"words": ["bakashier"],
 }
