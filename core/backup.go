@@ -122,6 +122,7 @@ func backupWorker(password string, dispatcherQueue chan<- dispatcherMessage, wor
 			isExistEntries := len(entries) > 0
 			
 			// バックアップの実行
+			isExistChanges := false
 			for _, file := range files {
 				hideName := utils.GenerateUniqueRandomName(nameMap)
 				entry := data.DirectoryEntry{ Type: data.Unknown }
@@ -142,6 +143,11 @@ func backupWorker(password string, dispatcherQueue chan<- dispatcherMessage, wor
 						HideName: hideName,
 						Size: uint64(0),
 						ModTime: time.Now(),
+					}
+					
+					// 既存のエントリと異なる場合は変更があると判定
+					if entry.Type != data.Directory || entry.RealName != file.Name() {
+						isExistChanges = true
 					}
 					
 					// 子ディレクトリの発見を通知
@@ -167,6 +173,7 @@ func backupWorker(password string, dispatcherQueue chan<- dispatcherMessage, wor
 							continue
 						}
 					}
+					isExistChanges = true
 					
 					srcFile := filepath.Join(queue.SrcDir, file.Name())
 					archiveFile := filepath.Join(queue.DistDir, fmt.Sprintf("%s.bks", hideName))
@@ -200,6 +207,7 @@ func backupWorker(password string, dispatcherQueue chan<- dispatcherMessage, wor
 			if isExistEntries {
 				for _, entry := range entries {
 					if _, ok := newEntries[entry.HideName]; !ok {
+						isExistChanges = true
 						if entry.Type == data.File {
 							os.Remove(filepath.Join(queue.DistDir, fmt.Sprintf("%s.bks", entry.HideName)))
 							fmt.Printf("File deleted: %s\n", filepath.Join(queue.DistDir, fmt.Sprintf("%s.bks", entry.HideName)))
@@ -212,27 +220,31 @@ func backupWorker(password string, dispatcherQueue chan<- dispatcherMessage, wor
 			}
 			
 			// ディレクトリエントリを保存
-			entries = make([]data.DirectoryEntry, 0, len(newEntries))
-			for _, entry := range newEntries {
-				entries = append(entries, entry)
+			if isExistChanges {
+				entries = make([]data.DirectoryEntry, 0, len(newEntries))
+				for _, entry := range newEntries {
+					entries = append(entries, entry)
+				}
+				content, err := data.ExportDirectoryEntries(entries)
+				if err != nil {
+					errHandler("Failed to export directory entries", err)
+					return
+				}
+				archive, err := data.ToArchiveData(queue.SrcDir, content, password)
+				if err != nil {
+					errHandler("Failed to create export directory entries archive data", err)
+					return
+				}
+				err = archive.Export(directoryEntryFile)
+				if err != nil {
+					errHandler("Failed to export directory entries archive", err)
+					return
+				}
+				
+				fmt.Printf("Successfully directory archived: %s\n", queue.SrcDir)
+			} else {
+				fmt.Printf("No changes found in directory: %s\n", queue.SrcDir)
 			}
-			content, err := data.ExportDirectoryEntries(entries)
-			if err != nil {
-				errHandler("Failed to export directory entries", err)
-				return
-			}
-			archive, err := data.ToArchiveData(queue.SrcDir, content, password)
-			if err != nil {
-				errHandler("Failed to create export directory entries archive data", err)
-				return
-			}
-			err = archive.Export(directoryEntryFile)
-			if err != nil {
-				errHandler("Failed to export directory entries archive", err)
-				return
-			}
-			
-			fmt.Printf("Successfully directory archived: %s\n", queue.SrcDir)
 		}()
 		
 		dispatcherQueue <- dispatcherMessage{
