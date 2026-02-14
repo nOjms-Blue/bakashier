@@ -158,7 +158,7 @@ func backupWorker(password string, dispatcherQueue chan<- dispatcherMessage, wor
 						Detail: "",
 					}
 					
-					fmt.Printf("Found directory: %s\n", filepath.Join(queue.SrcDir, file.Name()))
+					fmt.Printf("Found directory: %c%s%c\n", '"', filepath.Join(queue.SrcDir, file.Name()), '"')
 				} else {
 					fileInfo, err := file.Info()
 					if err != nil {
@@ -191,7 +191,7 @@ func backupWorker(password string, dispatcherQueue chan<- dispatcherMessage, wor
 						Size: uint64(fileInfo.Size()),
 						ModTime: fileInfo.ModTime(),
 					}
-					fmt.Printf("File archived: %s -> %s\n", filepath.Join(queue.SrcDir, file.Name()), filepath.Join(queue.DistDir, fmt.Sprintf("%s.bks", hideName)))
+					fmt.Printf("File archived: %c%s%c -> %c%s%c\n", '"', filepath.Join(queue.SrcDir, file.Name()), '"', '"', filepath.Join(queue.DistDir, fmt.Sprintf("%s.bks", hideName)), '"')
 					
 					if limit.Size > 0 && limit.Wait > 0 {
 						processedSize += uint64(fileInfo.Size())
@@ -210,10 +210,10 @@ func backupWorker(password string, dispatcherQueue chan<- dispatcherMessage, wor
 						isExistChanges = true
 						if entry.Type == data.File {
 							os.Remove(filepath.Join(queue.DistDir, fmt.Sprintf("%s.bks", entry.HideName)))
-							fmt.Printf("File deleted: %s\n", filepath.Join(queue.DistDir, fmt.Sprintf("%s.bks", entry.HideName)))
+							fmt.Printf("File deleted: %c%s%c\n", '"', filepath.Join(queue.DistDir, fmt.Sprintf("%s.bks", entry.HideName)), '"')
 						} else {
 							os.RemoveAll(filepath.Join(queue.DistDir, entry.HideName))
-							fmt.Printf("Directory deleted: %s\n", filepath.Join(queue.DistDir, entry.HideName))
+							fmt.Printf("Directory deleted: %c%s%c\n", '"', filepath.Join(queue.DistDir, entry.HideName), '"')
 						}
 					}
 				}
@@ -241,9 +241,9 @@ func backupWorker(password string, dispatcherQueue chan<- dispatcherMessage, wor
 					return
 				}
 				
-				fmt.Printf("Successfully directory archived: %s\n", queue.SrcDir)
+				fmt.Printf("Successfully directory archived: %c%s%c -> %c%s%c\n", '"', queue.SrcDir, '"', '"', queue.DistDir, '"')
 			} else {
-				fmt.Printf("No changes found in directory: %s\n", queue.SrcDir)
+				fmt.Printf("No changes found in directory: %c%s%c\n", '"', queue.SrcDir, '"')
 			}
 		}()
 		
