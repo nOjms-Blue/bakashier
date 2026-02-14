@@ -6,10 +6,11 @@ import (
 	"path/filepath"
 	"sync"
 	"time"
-
+	
 	"bakashier/data"
 	"bakashier/utils"
 )
+
 
 // ディスパッチャキューからメッセージを受け取り、ワーカーにジョブを配分する。
 // FIND_DIR でジョブを投入し、全ジョブが FINISH_JOB で完了すると各ワーカーに EXIT を送る。

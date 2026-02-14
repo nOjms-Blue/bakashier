@@ -6,6 +6,7 @@ import (
 	"os"
 )
 
+
 type ArchiveEntry struct {
 	Data []byte
 	Hash []byte

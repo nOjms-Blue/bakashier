@@ -5,6 +5,7 @@ import (
 	"sync"
 )
 
+
 // srcDir を暗号化・圧縮して distDir にバックアップする。
 // ディスパッチャ1つとワーカー4つを起動し、チャネルでジョブを分配する。
 func Backup(srcDir string, distDir string, password string, chunkSize uint64, limit Limit) {

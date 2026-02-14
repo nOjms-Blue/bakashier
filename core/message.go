@@ -1,5 +1,6 @@
 package core
 
+
 // ディスパッチャが扱うメッセージの種類。
 type dispatcherMessageType string
 const (
