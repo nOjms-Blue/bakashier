@@ -3,6 +3,7 @@
 REM Build bakashier.exe
 cd %~dp0
 cd ..
+SET NO_NEED_ECHO_ON=TRUE
 CALL scripts\build.bat
 @ECHO OFF
 IF %BUILD_ERROR% EQU 1 (
