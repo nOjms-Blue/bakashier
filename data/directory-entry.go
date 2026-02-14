@@ -7,7 +7,6 @@ import (
 	"time"
 )
 
-
 // エントリがディレクトリかファイルかを表す。
 type DirectoryEntryType byte
 const (

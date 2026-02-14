@@ -3,10 +3,9 @@ package data
 import (
 	"bakashier/utils"
 	"bytes"
-	
+
 	"errors"
 )
-
 
 // ファイル名・ファイル内容・パスワードを受け取り、圧縮・暗号化した ArchiveData に変換する。
 func ToArchiveData(filename string, content []byte, password string) (ArchiveData, error) {

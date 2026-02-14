@@ -2,7 +2,6 @@ package utils
 
 import "crypto/rand"
 
-
 const filenameChars = "abcdefghijklmnopqrstuvwxyz0123456789"
 
 // existing に存在しない、英小文字と数字のみのランダムな文字列を返す。

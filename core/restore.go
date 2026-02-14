@@ -6,21 +6,20 @@ import (
 	"path/filepath"
 	"sync"
 	"time"
-	
+
 	"bakashier/data"
 )
-
 
 // ディスパッチャキューからメッセージを受け取り、ワーカーにジョブを配分する。
 // 全ジョブ完了後に各ワーカーに EXIT を送って終了する。
 func restoreDispatcher(workers int, dispatcherQueue <-chan dispatcherMessage, workerQueue chan<- workerMessage, wg *sync.WaitGroup) {
 	defer wg.Done()
-	
+
 	var untreated int = 0
 	var untreatedMessage = []workerMessage{}
 	for {
 		msg := <-dispatcherQueue
-		
+
 		switch msg.MsgType {
 		case FIND_DIR:
 			untreatedMessage = append(untreatedMessage, workerMessage{
@@ -35,7 +34,7 @@ func restoreDispatcher(workers int, dispatcherQueue <-chan dispatcherMessage, wo
 		case ERROR:
 			fmt.Println(msg.Detail)
 		}
-		
+
 		if untreated <= 0 {
 			for i := 0; i < workers; i++ {
 				workerQueue <- workerMessage{
@@ -114,7 +113,7 @@ func restoreWorker(password string, dispatcherQueue chan<- dispatcherMessage, wo
 						DistDir: realDir,
 						Detail:  "",
 					}
-					fmt.Printf("Found directory: %c%s%c -> %c%s%c\n", '"', hiddenDir, '"', '"', realDir, '"')
+					fmt.Printf("Found directory: %s -> %s\n", hiddenDir, realDir)
 				case data.File:
 					archiveFile := filepath.Join(queue.SrcDir, fmt.Sprintf("%s.bks", entry.HideName))
 					
@@ -125,7 +124,7 @@ func restoreWorker(password string, dispatcherQueue chan<- dispatcherMessage, wo
 					}
 					_ = os.Chtimes(realFile, time.Now(), entry.ModTime)
 					
-					fmt.Printf("File restored: %c%s%c -> %c%s%c\n", '"', filepath.Join(queue.SrcDir, fmt.Sprintf("%s.bks", entry.HideName)), '"', '"', realFile, '"')
+					fmt.Printf("File restored: %s -> %s\n", filepath.Join(queue.SrcDir, fmt.Sprintf("%s.bks", entry.HideName)), realFile)
 					
 					if limit.Size > 0 && limit.Wait > 0 {
 						processedSize += uint64(entry.Size)
@@ -140,7 +139,7 @@ func restoreWorker(password string, dispatcherQueue chan<- dispatcherMessage, wo
 				}
 			}
 			
-			fmt.Printf("Successfully directory restored: %c%s%c\n", '"', queue.SrcDir, '"')
+			fmt.Printf("Successfully directory restored: %s\n", queue.SrcDir)
 		}()
 		
 		dispatcherQueue <- dispatcherMessage{
