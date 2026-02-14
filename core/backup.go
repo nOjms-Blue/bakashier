@@ -120,6 +120,9 @@ func backupWorker(password string, dispatcherQueue chan<- dispatcherMessage, wor
 				return
 			}
 			isExistEntries := len(entries) > 0
+			for _, entry := range entries {
+				nameMap[entry.HideName] = entry.RealName
+			}
 			
 			// バックアップの実行
 			isExistChanges := false
