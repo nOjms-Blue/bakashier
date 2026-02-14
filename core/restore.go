@@ -114,7 +114,7 @@ func restoreWorker(password string, dispatcherQueue chan<- dispatcherMessage, wo
 						DistDir: realDir,
 						Detail:  "",
 					}
-					fmt.Printf("Found directory: %s -> %s\n", hiddenDir, realDir)
+					fmt.Printf("Found directory: %c%s%c -> %c%s%c\n", '"', hiddenDir, '"', '"', realDir, '"')
 				case data.File:
 					archiveFile := filepath.Join(queue.SrcDir, fmt.Sprintf("%s.bks", entry.HideName))
 					
@@ -125,7 +125,7 @@ func restoreWorker(password string, dispatcherQueue chan<- dispatcherMessage, wo
 					}
 					_ = os.Chtimes(realFile, time.Now(), entry.ModTime)
 					
-					fmt.Printf("File restored: %s -> %s\n", filepath.Join(queue.SrcDir, fmt.Sprintf("%s.bks", entry.HideName)), realFile)
+					fmt.Printf("File restored: %c%s%c -> %c%s%c\n", '"', filepath.Join(queue.SrcDir, fmt.Sprintf("%s.bks", entry.HideName)), '"', '"', realFile, '"')
 					
 					if limit.Size > 0 && limit.Wait > 0 {
 						processedSize += uint64(entry.Size)
@@ -140,7 +140,7 @@ func restoreWorker(password string, dispatcherQueue chan<- dispatcherMessage, wo
 				}
 			}
 			
-			fmt.Printf("Successfully directory restored: %s\n", queue.SrcDir)
+			fmt.Printf("Successfully directory restored: %c%s%c\n", '"', queue.SrcDir, '"')
 		}()
 		
 		dispatcherQueue <- dispatcherMessage{
