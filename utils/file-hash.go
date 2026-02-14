@@ -5,6 +5,7 @@ import (
 	"hash/crc32"
 )
 
+
 // データの CRC32(IEEE) を計算し、4バイト（BigEndian）で返す。
 func CRC32HashBytes(data []byte) []byte {
 	hash := crc32.ChecksumIEEE(data)

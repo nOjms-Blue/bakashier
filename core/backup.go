@@ -6,10 +6,11 @@ import (
 	"path/filepath"
 	"sync"
 	"time"
-
+	
 	"bakashier/data"
 	"bakashier/utils"
 )
+
 
 // ディスパッチャキューからメッセージを受け取り、ワーカーにジョブを配分する。
 // FIND_DIR でジョブを投入し、全ジョブが FINISH_JOB で完了すると各ワーカーに EXIT を送る。
@@ -120,8 +121,12 @@ func backupWorker(password string, dispatcherQueue chan<- dispatcherMessage, wor
 				return
 			}
 			isExistEntries := len(entries) > 0
+			for _, entry := range entries {
+				nameMap[entry.HideName] = entry.RealName
+			}
 			
 			// バックアップの実行
+			isExistChanges := false
 			for _, file := range files {
 				hideName := utils.GenerateUniqueRandomName(nameMap)
 				entry := data.DirectoryEntry{ Type: data.Unknown }
@@ -144,6 +149,11 @@ func backupWorker(password string, dispatcherQueue chan<- dispatcherMessage, wor
 						ModTime: time.Now(),
 					}
 					
+					// 既存のエントリと異なる場合は変更があると判定
+					if entry.Type != data.Directory || entry.RealName != file.Name() {
+						isExistChanges = true
+					}
+					
 					// 子ディレクトリの発見を通知
 					dispatcherQueue <- dispatcherMessage{
 						MsgType: FIND_DIR,
@@ -152,7 +162,7 @@ func backupWorker(password string, dispatcherQueue chan<- dispatcherMessage, wor
 						Detail: "",
 					}
 					
-					fmt.Printf("Found directory: %s\n", filepath.Join(queue.SrcDir, file.Name()))
+					fmt.Printf("Found directory: %c%s%c\n", '"', filepath.Join(queue.SrcDir, file.Name()), '"')
 				} else {
 					fileInfo, err := file.Info()
 					if err != nil {
@@ -167,6 +177,7 @@ func backupWorker(password string, dispatcherQueue chan<- dispatcherMessage, wor
 							continue
 						}
 					}
+					isExistChanges = true
 					
 					srcFile := filepath.Join(queue.SrcDir, file.Name())
 					archiveFile := filepath.Join(queue.DistDir, fmt.Sprintf("%s.bks", hideName))
@@ -184,7 +195,7 @@ func backupWorker(password string, dispatcherQueue chan<- dispatcherMessage, wor
 						Size: uint64(fileInfo.Size()),
 						ModTime: fileInfo.ModTime(),
 					}
-					fmt.Printf("File archived: %s -> %s\n", filepath.Join(queue.SrcDir, file.Name()), filepath.Join(queue.DistDir, fmt.Sprintf("%s.bks", hideName)))
+					fmt.Printf("File archived: %c%s%c -> %c%s%c\n", '"', filepath.Join(queue.SrcDir, file.Name()), '"', '"', filepath.Join(queue.DistDir, fmt.Sprintf("%s.bks", hideName)), '"')
 					
 					if limit.Size > 0 && limit.Wait > 0 {
 						processedSize += uint64(fileInfo.Size())
@@ -200,39 +211,44 @@ func backupWorker(password string, dispatcherQueue chan<- dispatcherMessage, wor
 			if isExistEntries {
 				for _, entry := range entries {
 					if _, ok := newEntries[entry.HideName]; !ok {
+						isExistChanges = true
 						if entry.Type == data.File {
 							os.Remove(filepath.Join(queue.DistDir, fmt.Sprintf("%s.bks", entry.HideName)))
-							fmt.Printf("File deleted: %s\n", filepath.Join(queue.DistDir, fmt.Sprintf("%s.bks", entry.HideName)))
+							fmt.Printf("File deleted: %c%s%c\n", '"', filepath.Join(queue.DistDir, fmt.Sprintf("%s.bks", entry.HideName)), '"')
 						} else {
 							os.RemoveAll(filepath.Join(queue.DistDir, entry.HideName))
-							fmt.Printf("Directory deleted: %s\n", filepath.Join(queue.DistDir, entry.HideName))
+							fmt.Printf("Directory deleted: %c%s%c\n", '"', filepath.Join(queue.DistDir, entry.HideName), '"')
 						}
 					}
 				}
 			}
 			
 			// ディレクトリエントリを保存
-			entries = make([]data.DirectoryEntry, 0, len(newEntries))
-			for _, entry := range newEntries {
-				entries = append(entries, entry)
+			if isExistChanges {
+				entries = make([]data.DirectoryEntry, 0, len(newEntries))
+				for _, entry := range newEntries {
+					entries = append(entries, entry)
+				}
+				content, err := data.ExportDirectoryEntries(entries)
+				if err != nil {
+					errHandler("Failed to export directory entries", err)
+					return
+				}
+				archive, err := data.ToArchiveData(queue.SrcDir, content, password)
+				if err != nil {
+					errHandler("Failed to create export directory entries archive data", err)
+					return
+				}
+				err = archive.Export(directoryEntryFile)
+				if err != nil {
+					errHandler("Failed to export directory entries archive", err)
+					return
+				}
+				
+				fmt.Printf("Successfully directory archived: %c%s%c -> %c%s%c\n", '"', queue.SrcDir, '"', '"', queue.DistDir, '"')
+			} else {
+				fmt.Printf("No changes found in directory: %c%s%c\n", '"', queue.SrcDir, '"')
 			}
-			content, err := data.ExportDirectoryEntries(entries)
-			if err != nil {
-				errHandler("Failed to export directory entries", err)
-				return
-			}
-			archive, err := data.ToArchiveData(queue.SrcDir, content, password)
-			if err != nil {
-				errHandler("Failed to create export directory entries archive data", err)
-				return
-			}
-			err = archive.Export(directoryEntryFile)
-			if err != nil {
-				errHandler("Failed to export directory entries archive", err)
-				return
-			}
-			
-			fmt.Printf("Successfully directory archived: %s\n", queue.SrcDir)
 		}()
 		
 		dispatcherQueue <- dispatcherMessage{

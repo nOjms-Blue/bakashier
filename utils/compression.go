@@ -6,6 +6,7 @@ import (
 	"io"
 )
 
+
 // バイト配列を zlib で圧縮し、結果のバイト列を返す。
 func CompressBytes(data []byte) ([]byte, error) {
 	var b bytes.Buffer
