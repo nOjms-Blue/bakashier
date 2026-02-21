@@ -23,6 +23,15 @@ func main() {
 	
 	limit := core.Limit{Size: args.LimitSize, Wait: args.LimitWait}
 	run := func() {
+		if args.Password == "" {
+			input, err := cli.InputPassword()
+			if err != nil {
+				fmt.Println(err.Error())
+				os.Exit(1)
+			}
+			args.Password = input
+		}
+		
 		wg := sync.WaitGroup{}
 		toViewQueue := make(chan view.MessageToView, 64)
 		toManagerQueue := make(chan view.MessageToManager, 64)
