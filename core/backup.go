@@ -67,7 +67,7 @@ func backupDispatcher(workers int, dispatcherQueue <-chan dispatcherMessage, wor
 
 // ワーカーキューからジョブを受け取り、ディレクトリを走査してファイルをアーカイブする。
 // 既存の _directory_.bks を読み、変更のないファイルはスキップする。ディレクトリは FIND_DIR で再投入する。
-func backupWorker(password string, dispatcherQueue chan<- dispatcherMessage, workerQueue <-chan workerMessage, wg *sync.WaitGroup, chunkSize uint64, limit Limit) {
+func backupWorker(workerId uint, password string, dispatcherQueue chan<- dispatcherMessage, workerQueue <-chan workerMessage, wg *sync.WaitGroup, chunkSize uint64, limit Limit) {
 	defer wg.Done()
 	var processedSize uint64 = 0
 	
@@ -77,6 +77,7 @@ func backupWorker(password string, dispatcherQueue chan<- dispatcherMessage, wor
 		
 		var errHandler = func(prefix string, err error) {
 			dispatcherQueue <- dispatcherMessage{
+				WorkerId: workerId,
 				MsgType: ERROR,
 				SrcDir: queue.SrcDir,
 				DistDir: queue.DistDir,
@@ -159,6 +160,7 @@ func backupWorker(password string, dispatcherQueue chan<- dispatcherMessage, wor
 					
 					// 子ディレクトリの発見を通知
 					dispatcherQueue <- dispatcherMessage{
+						WorkerId: workerId,
 						MsgType: FIND_DIR,
 						SrcDir: filepath.Join(queue.SrcDir, file.Name()),
 						DistDir: filepath.Join(queue.DistDir, hideName),
@@ -307,6 +309,7 @@ func backupWorker(password string, dispatcherQueue chan<- dispatcherMessage, wor
 		}()
 		
 		dispatcherQueue <- dispatcherMessage{
+			WorkerId: workerId,
 			MsgType: FINISH_JOB,
 			SrcDir: queue.SrcDir,
 			DistDir: queue.DistDir,

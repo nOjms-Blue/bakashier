@@ -16,8 +16,9 @@ const (
 	EXIT        workerMessageType = "EXIT"     // ワーカー終了指示
 )
 
-// ディスパッチャ⇔ワーカー間でやり取りするメッセージ。
+// ディスパッチャに渡すメッセージ。
 type dispatcherMessage struct {
+	WorkerId uint
 	MsgType dispatcherMessageType
 	SrcDir  string
 	DistDir string

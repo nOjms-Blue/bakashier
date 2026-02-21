@@ -13,6 +13,11 @@ func Backup(srcDir string, distDir string, password string, chunkSize uint64, li
 	var workers int = runtime.GOMAXPROCS(0)
 	var queueSize int = workers * 8
 	
+	if workers <= 0 {
+		workers = 1
+		queueSize = 8
+	}
+	
 	dispatcherQueue := make(chan dispatcherMessage, queueSize)
 	workerQueue := make(chan workerMessage, queueSize)
 	
@@ -25,8 +30,8 @@ func Backup(srcDir string, distDir string, password string, chunkSize uint64, li
 	
 	wg.Add(workers + 1)
 	go backupDispatcher(workers, dispatcherQueue, workerQueue, &wg)
-	for i := 0; i < workers; i++ {
-		go backupWorker(password, dispatcherQueue, workerQueue, &wg, chunkSize, limit)
+	for i := uint(0); i < uint(workers); i++ {
+		go backupWorker(i + 1, password, dispatcherQueue, workerQueue, &wg, chunkSize, limit)
 	}
 	wg.Wait()
 	
@@ -41,6 +46,11 @@ func Restore(srcDir string, distDir string, password string, limit Limit) {
 	var workers int = runtime.GOMAXPROCS(0)
 	var queueSize int = workers * 8
 	
+	if workers <= 0 {
+		workers = 1
+		queueSize = 8
+	}
+	
 	dispatcherQueue := make(chan dispatcherMessage, queueSize)
 	workerQueue := make(chan workerMessage, queueSize)
 	
@@ -53,8 +63,8 @@ func Restore(srcDir string, distDir string, password string, limit Limit) {
 	
 	wg.Add(workers + 1)
 	go restoreDispatcher(workers, dispatcherQueue, workerQueue, &wg)
-	for i := 0; i < workers; i++ {
-		go restoreWorker(password, dispatcherQueue, workerQueue, &wg, limit)
+	for i := uint(0); i < uint(workers); i++ {
+		go restoreWorker(i + 1, password, dispatcherQueue, workerQueue, &wg, limit)
 	}
 	wg.Wait()
 	

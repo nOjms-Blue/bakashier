@@ -65,7 +65,7 @@ func restoreDispatcher(workers int, dispatcherQueue <-chan dispatcherMessage, wo
 
 // ワーカーキューからジョブを受け取り、_directory_.bks と .bks ファイルから復元する。
 // ディレクトリエントリに従い、隠し名の .bks を復号して実名で distDir に書き出す。
-func restoreWorker(password string, dispatcherQueue chan<- dispatcherMessage, workerQueue <-chan workerMessage, wg *sync.WaitGroup, limit Limit) {
+func restoreWorker(workerId uint, password string, dispatcherQueue chan<- dispatcherMessage, workerQueue <-chan workerMessage, wg *sync.WaitGroup, limit Limit) {
 	defer wg.Done()
 	
 	var processedSize uint64 = 0
@@ -76,6 +76,7 @@ func restoreWorker(password string, dispatcherQueue chan<- dispatcherMessage, wo
 		
 		var errHandler = func(prefix string, err error) {
 			dispatcherQueue <- dispatcherMessage{
+				WorkerId: workerId,
 				MsgType: ERROR,
 				SrcDir:  queue.SrcDir,
 				DistDir: queue.DistDir,
@@ -109,6 +110,7 @@ func restoreWorker(password string, dispatcherQueue chan<- dispatcherMessage, wo
 					}
 					
 					dispatcherQueue <- dispatcherMessage{
+						WorkerId: workerId,
 						MsgType: FIND_DIR,
 						SrcDir:  hiddenDir,
 						DistDir: realDir,
@@ -144,6 +146,7 @@ func restoreWorker(password string, dispatcherQueue chan<- dispatcherMessage, wo
 		}()
 		
 		dispatcherQueue <- dispatcherMessage{
+			WorkerId: workerId,
 			MsgType: FINISH_JOB,
 			SrcDir:  queue.SrcDir,
 			DistDir: queue.DistDir,
