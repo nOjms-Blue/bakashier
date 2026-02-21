@@ -1,8 +1,11 @@
 {
 	"ignorePaths": ["go.mod"],
 	"ignoreWords": [
+		"bubbletea",
 		"CDPATH",
+		"charmbracelet",
 		"ERRORLEVEL",
+		"lipgloss",
 		"LOCALAPPDATA",
 	],
 	"words": ["bakashier"],
