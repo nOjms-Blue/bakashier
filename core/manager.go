@@ -20,10 +20,10 @@ func Backup(srcDir string, distDir string, password string, chunkSize uint64, li
 		queueSize = 8
 	}
 	
-	workerToDispatcherQueue := make(chan dispatcherMessage, queueSize)
-	dispatcherToWorkerQueue := make(chan workerMessage, queueSize)
+	workerToDispatcherQueue := make(chan messageFromWorkerToDispatcher, queueSize)
+	dispatcherToWorkerQueue := make(chan messageFromDispatcherToWorker, queueSize)
 	
-	workerToDispatcherQueue <- dispatcherMessage{
+	workerToDispatcherQueue <- messageFromWorkerToDispatcher{
 		MsgType: FIND_DIR,
 		SrcDir: srcDir,
 		DistDir: distDir,
@@ -53,10 +53,10 @@ func Restore(srcDir string, distDir string, password string, limit Limit, toView
 		queueSize = 8
 	}
 	
-	workerToDispatcherQueue := make(chan dispatcherMessage, queueSize)
-	dispatcherToWorkerQueue := make(chan workerMessage, queueSize)
+	workerToDispatcherQueue := make(chan messageFromWorkerToDispatcher, queueSize)
+	dispatcherToWorkerQueue := make(chan messageFromDispatcherToWorker, queueSize)
 	
-	workerToDispatcherQueue <- dispatcherMessage{
+	workerToDispatcherQueue <- messageFromWorkerToDispatcher{
 		MsgType: FIND_DIR,
 		SrcDir:  srcDir,
 		DistDir: distDir,

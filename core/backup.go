@@ -16,7 +16,7 @@ import (
 
 // ディスパッチャキューからメッセージを受け取り、ワーカーにジョブを配分する。
 // FIND_DIR でジョブを投入し、全ジョブが FINISH_JOB で完了すると各ワーカーに EXIT を送る。
-func backupDispatcher(workers int, fromWorkerQueue <-chan dispatcherMessage, toWorkerQueue chan workerMessage, toViewQueue chan<- view.MessageToView, fromViewQueue <-chan view.MessageToDispatcher, wg *sync.WaitGroup) {
+func backupDispatcher(workers int, fromWorkerQueue <-chan messageFromWorkerToDispatcher, toWorkerQueue chan messageFromDispatcherToWorker, toViewQueue chan<- view.MessageToView, fromViewQueue <-chan view.MessageToDispatcher, wg *sync.WaitGroup) {
 	defer wg.Done()
 	defer func() {
 		toViewQueue <- view.MessageToView{
@@ -28,7 +28,7 @@ func backupDispatcher(workers int, fromWorkerQueue <-chan dispatcherMessage, toW
 	}()
 	
 	var untreated int = 0
-	var untreatedMessage = []workerMessage{}
+	var untreatedMessage = []messageFromDispatcherToWorker{}
 	var stopWorkers bool = false
 	var termination bool = false
 	for {
@@ -47,7 +47,7 @@ func backupDispatcher(workers int, fromWorkerQueue <-chan dispatcherMessage, toW
 			// ワーカーからのメッセージを処理する
 			switch msg.MsgType {
 			case FIND_DIR:
-				untreatedMessage = append(untreatedMessage, workerMessage{
+				untreatedMessage = append(untreatedMessage, messageFromDispatcherToWorker{
 					MsgType: NEXT_JOB,
 					SrcDir: msg.SrcDir,
 					DistDir: msg.DistDir,
@@ -95,11 +95,11 @@ func backupDispatcher(workers int, fromWorkerQueue <-chan dispatcherMessage, toW
 				}
 			}()
 			messages := len(untreatedMessage)
-			untreatedMessage = make([]workerMessage, 0)
+			untreatedMessage = make([]messageFromDispatcherToWorker, 0)
 			untreated -= messages
 			
 			for i := 0; i < untreated; i++ {
-				toWorkerQueue <- workerMessage{
+				toWorkerQueue <- messageFromDispatcherToWorker{
 					MsgType: EXIT,
 					SrcDir: "",
 					DistDir: "",
@@ -111,7 +111,7 @@ func backupDispatcher(workers int, fromWorkerQueue <-chan dispatcherMessage, toW
 		// 全ジョブが完了した場合は、各ワーカーに EXIT を送って終了
 		if untreated <= 0 {
 			for i := 0; i < workers; i++ {
-				toWorkerQueue <- workerMessage{
+				toWorkerQueue <- messageFromDispatcherToWorker{
 					MsgType: EXIT,
 					SrcDir: "",
 					DistDir: "",
@@ -148,7 +148,7 @@ func backupDispatcher(workers int, fromWorkerQueue <-chan dispatcherMessage, toW
 
 // ワーカーキューからジョブを受け取り、ディレクトリを走査してファイルをアーカイブする。
 // 既存の _directory_.bks を読み、変更のないファイルはスキップする。ディレクトリは FIND_DIR で再投入する。
-func backupWorker(workerId uint, password string, toDispatcherQueue chan<- dispatcherMessage, fromDispatcherQueue <-chan workerMessage, toViewQueue chan<- view.MessageToView, wg *sync.WaitGroup, chunkSize uint64, limit Limit) {
+func backupWorker(workerId uint, password string, toDispatcherQueue chan<- messageFromWorkerToDispatcher, fromDispatcherQueue <-chan messageFromDispatcherToWorker, toViewQueue chan<- view.MessageToView, wg *sync.WaitGroup, chunkSize uint64, limit Limit) {
 	defer wg.Done()
 	var processedSize uint64 = 0
 	
@@ -164,7 +164,7 @@ func backupWorker(workerId uint, password string, toDispatcherQueue chan<- dispa
 		if queue.MsgType == EXIT { break }
 		
 		var errHandler = func(prefix string, err error) {
-			toDispatcherQueue <- dispatcherMessage{
+			toDispatcherQueue <- messageFromWorkerToDispatcher{
 				WorkerId: workerId,
 				MsgType: ERROR,
 				SrcDir: queue.SrcDir,
@@ -256,7 +256,7 @@ func backupWorker(workerId uint, password string, toDispatcherQueue chan<- dispa
 					}
 					
 					// 子ディレクトリの発見をディスパッチャに通知
-					toDispatcherQueue <- dispatcherMessage{
+					toDispatcherQueue <- messageFromWorkerToDispatcher{
 						WorkerId: workerId,
 						MsgType: FIND_DIR,
 						SrcDir: filepath.Join(queue.SrcDir, file.Name()),
@@ -426,7 +426,7 @@ func backupWorker(workerId uint, password string, toDispatcherQueue chan<- dispa
 			DistPath: queue.DistDir,
 			Detail: "",
 		}
-		toDispatcherQueue <- dispatcherMessage{
+		toDispatcherQueue <- messageFromWorkerToDispatcher{
 			WorkerId: workerId,
 			MsgType: FINISH_JOB,
 			SrcDir: queue.SrcDir,
