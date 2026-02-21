@@ -6,7 +6,7 @@ type dispatcherMessageType string
 const (
 	FIND_DIR    dispatcherMessageType = "FIND_DIR"   // 処理対象ディレクトリの通知
 	FINISH_JOB  dispatcherMessageType = "FINISH_JOB" // ジョブ完了通知
-	ERROR       dispatcherMessageType = "ERROR"     // エラー報告
+	ERROR       dispatcherMessageType = "ERROR"      // エラー報告
 )
 
 // ワーカーが受け取るメッセージの種類。
