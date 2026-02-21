@@ -182,8 +182,10 @@ func (m model) View() string {
 	if !working {
 		if !m.stop && !m.quit {
 			b.Reset()
-			b.WriteString(fmt.Sprintf("%s finished", modeLabel))
-			return b.String()
+			b.WriteString(fmt.Sprintf("%s finished\n", modeLabel))
+		} else if m.quit {
+			b.Reset()
+			b.WriteString("quit\n")
 		}
 	}
 	return b.String()
