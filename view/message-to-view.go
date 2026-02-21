@@ -4,7 +4,7 @@ package view
 type SourceType string
 const (
 	WORKER SourceType = "WORKER"
-	DISPATCHER SourceType = "DISPATCHER"
+	MANAGER SourceType = "MANAGER"
 )
 
 type MessageToViewType string

@@ -14,31 +14,32 @@ import (
 
 
 type workerStatus struct {
-	srcDirectory string
+	srcDirectory  string
 	distDirectory string
-	srcFile string
-	distFile string
+	srcFile       string
+	distFile      string
 }
-
 
 type model struct {
-	mode cli.ModeType
-	stop bool
-	quit bool
-	workers map[uint]workerStatus  // 各ワーカーの状態
-	errorLog []string              // エラーログ
+	mode         cli.ModeType
+	stop         bool
+	quit         bool
+	workers      map[uint]workerStatus // 各ワーカーの状態
+	errorLog     []string              // エラーログ
 	receiveQueue <-chan MessageToView
-	sendQueue chan<- MessageToDispatcher
+	sendQueue    chan<- MessageToManager
 }
 
-type channelClosedMsg struct {}
+type channelClosedMsg struct{}
 
 const MAX_ERROR_LOGS int = 4
 
 func receiveMessageCmd(queue <-chan MessageToView) tea.Cmd {
 	return func() tea.Msg {
 		msg, ok := <-queue
-		if !ok { return channelClosedMsg{} }
+		if !ok {
+			return channelClosedMsg{}
+		}
 		return msg
 	}
 }
@@ -97,13 +98,13 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		switch msg.String() {
 		case "s":
 			m.stop = true
-			m.sendQueue <- MessageToDispatcher{MsgType: STOP_WORKERS}
+			m.sendQueue <- MessageToManager{MsgType: STOP_WORKERS}
 		case "r":
 			m.stop = false
-			m.sendQueue <- MessageToDispatcher{MsgType: RESUME_WORKERS}
+			m.sendQueue <- MessageToManager{MsgType: RESUME_WORKERS}
 		case "q":
 			m.quit = true
-			m.sendQueue <- MessageToDispatcher{MsgType: TERMINATION}
+			m.sendQueue <- MessageToManager{MsgType: TERMINATION}
 		}
 	}
 	
@@ -148,14 +149,18 @@ func (m model) View() string {
 			b.WriteString(fmt.Sprintf("Worker %2d: %s\n\n", workerId, gray.Render("(idle)")))
 		}
 	}
+	
 	b.WriteString("--------------------\n")
+	
 	for i := 0; i < MAX_ERROR_LOGS; i++ {
 		if i < len(m.errorLog) {
 			b.WriteString(red.Render(m.errorLog[i]))
 		}
 		b.WriteString("\n")
 	}
+	
 	b.WriteString("--------------------\n")
+	
 	if m.quit {
 		if working {
 			b.WriteString(gray.Render("quitting...") + " \n")

@@ -7,7 +7,7 @@ import (
 	"runtime"
 	"sync"
 	"time"
-	
+
 	"bakashier/data"
 	"bakashier/view"
 )
@@ -15,11 +15,11 @@ import (
 
 // ディスパッチャキューからメッセージを受け取り、ワーカーにジョブを配分する。
 // 全ジョブ完了後に各ワーカーに EXIT を送って終了する。
-func restoreDispatcher(workers int, fromWorkerQueue <-chan messageFromWorkerToDispatcher, toWorkerQueue chan messageFromDispatcherToWorker, toViewQueue chan<- view.MessageToView, fromViewQueue <-chan view.MessageToDispatcher, wg *sync.WaitGroup) {
+func restoreManager(workers int, fromWorkerQueue <-chan messageFromWorkerToManager, toWorkerQueue chan messageFromManagerToWorker, toViewQueue chan<- view.MessageToView, fromViewQueue <-chan view.MessageToManager, wg *sync.WaitGroup) {
 	defer wg.Done()
 	defer func() {
 		toViewQueue <- view.MessageToView{
-			Source:   view.DISPATCHER,
+			Source:   view.MANAGER,
 			MsgType:  view.FINISHED,
 			WorkerId: 0,
 			Detail:   "",
@@ -27,7 +27,7 @@ func restoreDispatcher(workers int, fromWorkerQueue <-chan messageFromWorkerToDi
 	}()
 	
 	var untreated int = 0
-	var untreatedMessage = []messageFromDispatcherToWorker{}
+	var untreatedMessage = []messageFromManagerToWorker{}
 	var stopWorkers bool = false
 	var termination bool = false
 	for {
@@ -46,7 +46,7 @@ func restoreDispatcher(workers int, fromWorkerQueue <-chan messageFromWorkerToDi
 			// ワーカーからのメッセージを処理する
 			switch msg.MsgType {
 			case FIND_DIR:
-				untreatedMessage = append(untreatedMessage, messageFromDispatcherToWorker{
+				untreatedMessage = append(untreatedMessage, messageFromManagerToWorker{
 					MsgType: NEXT_JOB,
 					SrcDir:  msg.SrcDir,
 					DistDir: msg.DistDir,
@@ -57,7 +57,7 @@ func restoreDispatcher(workers int, fromWorkerQueue <-chan messageFromWorkerToDi
 				untreated--
 			case ERROR:
 				toViewQueue <- view.MessageToView{
-					Source:   view.DISPATCHER,
+					Source:   view.MANAGER,
 					MsgType:  view.ERROR,
 					WorkerId: msg.WorkerId,
 					Detail:   msg.Detail,
@@ -95,11 +95,11 @@ func restoreDispatcher(workers int, fromWorkerQueue <-chan messageFromWorkerToDi
 				}
 			}()
 			messages := len(untreatedMessage)
-			untreatedMessage = make([]messageFromDispatcherToWorker, 0)
+			untreatedMessage = make([]messageFromManagerToWorker, 0)
 			untreated -= messages
 			
 			for i := 0; i < untreated; i++ {
-				toWorkerQueue <- messageFromDispatcherToWorker{
+				toWorkerQueue <- messageFromManagerToWorker{
 					MsgType: EXIT,
 					SrcDir:  "",
 					DistDir: "",
@@ -111,7 +111,7 @@ func restoreDispatcher(workers int, fromWorkerQueue <-chan messageFromWorkerToDi
 		// 全ジョブが完了した場合は、各ワーカーに EXIT を送って終了
 		if untreated <= 0 {
 			for i := 0; i < workers; i++ {
-				toWorkerQueue <- messageFromDispatcherToWorker{
+				toWorkerQueue <- messageFromManagerToWorker{
 					MsgType: EXIT,
 					SrcDir:  "",
 					DistDir: "",
@@ -124,15 +124,9 @@ func restoreDispatcher(workers int, fromWorkerQueue <-chan messageFromWorkerToDi
 		// ジョブの配分
 		for {
 			// メッセージが来た場合は、受信メッセージを先に処理する
-			if len(fromViewQueue) != 0 {
-				break
-			}
-			if len(fromWorkerQueue) != 0 {
-				break
-			}
-			if len(untreatedMessage) == 0 {
-				break
-			}
+			if len(fromViewQueue) != 0 { break }
+			if len(fromWorkerQueue) != 0 { break }
+			if len(untreatedMessage) == 0 { break }
 			
 			// 一時停止中または終了指示が来た場合は、ジョブを配分しない
 			if stopWorkers || termination {
@@ -154,7 +148,7 @@ func restoreDispatcher(workers int, fromWorkerQueue <-chan messageFromWorkerToDi
 
 // ワーカーキューからジョブを受け取り、_directory_.bks と .bks ファイルから復元する。
 // ディレクトリエントリに従い、隠し名の .bks を復号して実名で distDir に書き出す。
-func restoreWorker(workerId uint, password string, toDispatcherQueue chan<- messageFromWorkerToDispatcher, fromDispatcherQueue <-chan messageFromDispatcherToWorker, toViewQueue chan<- view.MessageToView, wg *sync.WaitGroup, limit Limit) {
+func restoreWorker(workerId uint, password string, toManagerQueue chan<- messageFromWorkerToManager, fromManagerQueue <-chan messageFromManagerToWorker, toViewQueue chan<- view.MessageToView, wg *sync.WaitGroup, limit Limit) {
 	defer wg.Done()
 	var processedSize uint64 = 0
 	
@@ -166,11 +160,11 @@ func restoreWorker(workerId uint, password string, toDispatcherQueue chan<- mess
 	}
 	
 	for {
-		queue := <-fromDispatcherQueue
+		queue := <-fromManagerQueue
 		if queue.MsgType == EXIT { break }
 		
 		var errHandler = func(prefix string, err error) {
-			toDispatcherQueue <- messageFromWorkerToDispatcher{
+			toManagerQueue <- messageFromWorkerToManager{
 				WorkerId: workerId,
 				MsgType:  ERROR,
 				SrcDir:   queue.SrcDir,
@@ -217,7 +211,7 @@ func restoreWorker(workerId uint, password string, toDispatcherQueue chan<- mess
 					}
 					
 					// 子ディレクトリの発見をディスパッチャに通知
-					toDispatcherQueue <- messageFromWorkerToDispatcher{
+					toManagerQueue <- messageFromWorkerToManager{
 						WorkerId: workerId,
 						MsgType:  FIND_DIR,
 						SrcDir:   hiddenDir,
@@ -229,15 +223,15 @@ func restoreWorker(workerId uint, password string, toDispatcherQueue chan<- mess
 					
 					// ファイル処理開始をビューに通知
 					toViewQueue <- view.MessageToView{
-						Source: view.WORKER,
-						MsgType: view.START_FILE,
+						Source:   view.WORKER,
+						MsgType:  view.START_FILE,
 						WorkerId: workerId,
-						SrcPath: archiveFile,
+						SrcPath:  archiveFile,
 						DistPath: filepath.Join(queue.DistDir, entry.RealName),
-						Detail: "",
+						Detail:   "",
 					}
 					
-					func () {
+					func() {
 						err, realFile := data.ImportStreamArchive(archiveFile, queue.DistDir, password)
 						if err != nil {
 							errHandler("Failed to import stream archive", err)
@@ -256,12 +250,12 @@ func restoreWorker(workerId uint, password string, toDispatcherQueue chan<- mess
 					
 					// ファイル処理完了をビューに通知
 					toViewQueue <- view.MessageToView{
-						Source: view.WORKER,
-						MsgType: view.FINISH_FILE,
+						Source:   view.WORKER,
+						MsgType:  view.FINISH_FILE,
 						WorkerId: workerId,
-						SrcPath: archiveFile,
+						SrcPath:  archiveFile,
 						DistPath: filepath.Join(queue.DistDir, entry.RealName),
-						Detail: "",
+						Detail:   "",
 					}
 				default:
 					errHandler("Unknown entry type", fmt.Errorf("%v", entry.Type))
@@ -281,7 +275,7 @@ func restoreWorker(workerId uint, password string, toDispatcherQueue chan<- mess
 		}
 		
 		// ディレクトリ処理完了をディスパッチャに通知
-		toDispatcherQueue <- messageFromWorkerToDispatcher{
+		toManagerQueue <- messageFromWorkerToManager{
 			WorkerId: workerId,
 			MsgType:  FINISH_JOB,
 			SrcDir:   queue.SrcDir,
@@ -293,7 +287,7 @@ func restoreWorker(workerId uint, password string, toDispatcherQueue chan<- mess
 
 // srcDir（バックアップ先）から distDir へ復元する。
 // ディスパッチャ1つとワーカー4つを起動し、チャネルでジョブを分配する。
-func Restore(srcDir string, distDir string, password string, limit Limit, toViewQueue chan<- view.MessageToView, fromViewQueue <-chan view.MessageToDispatcher) {
+func Restore(srcDir string, distDir string, password string, limit Limit, toViewQueue chan<- view.MessageToView, fromViewQueue <-chan view.MessageToManager) {
 	var wg sync.WaitGroup
 	var workers int = runtime.GOMAXPROCS(0)
 	var queueSize int = workers * 8
@@ -303,10 +297,10 @@ func Restore(srcDir string, distDir string, password string, limit Limit, toView
 		queueSize = 8
 	}
 	
-	workerToDispatcherQueue := make(chan messageFromWorkerToDispatcher, queueSize)
-	dispatcherToWorkerQueue := make(chan messageFromDispatcherToWorker, queueSize)
+	workerToManagerQueue := make(chan messageFromWorkerToManager, queueSize)
+	managerToWorkerQueue := make(chan messageFromManagerToWorker, queueSize)
 	
-	workerToDispatcherQueue <- messageFromWorkerToDispatcher{
+	workerToManagerQueue <- messageFromWorkerToManager{
 		MsgType: FIND_DIR,
 		SrcDir:  srcDir,
 		DistDir: distDir,
@@ -314,12 +308,12 @@ func Restore(srcDir string, distDir string, password string, limit Limit, toView
 	}
 	
 	wg.Add(workers + 1)
-	go restoreDispatcher(workers, workerToDispatcherQueue, dispatcherToWorkerQueue, toViewQueue, fromViewQueue, &wg)
+	go restoreManager(workers, workerToManagerQueue, managerToWorkerQueue, toViewQueue, fromViewQueue, &wg)
 	for i := uint(0); i < uint(workers); i++ {
-		go restoreWorker(i + 1, password, workerToDispatcherQueue, dispatcherToWorkerQueue, toViewQueue, &wg, limit)
+		go restoreWorker(i+1, password, workerToManagerQueue, managerToWorkerQueue, toViewQueue, &wg, limit)
 	}
 	wg.Wait()
 	
-	close(workerToDispatcherQueue)
-	close(dispatcherToWorkerQueue)
+	close(workerToManagerQueue)
+	close(managerToWorkerQueue)
 }

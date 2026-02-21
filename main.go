@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"os"
 	"sync"
-
+	
 	"bakashier/cli"
 	"bakashier/constants"
 	"bakashier/core"
@@ -25,8 +25,8 @@ func main() {
 	run := func() {
 		wg := sync.WaitGroup{}
 		toViewQueue := make(chan view.MessageToView, 64)
-		toDispatcherQueue := make(chan view.MessageToDispatcher, 64)
-		program := view.NewProgram(args.Mode, toViewQueue, toDispatcherQueue)
+		toManagerQueue := make(chan view.MessageToManager, 64)
+		program := view.NewProgram(args.Mode, toViewQueue, toManagerQueue)
 		
 		wg.Add(1)
 		go func() {
@@ -38,9 +38,9 @@ func main() {
 			}
 		}()
 		if args.Mode == cli.ModeBackup {
-			core.Backup(args.SrcDir, args.DistDir, args.Password, args.ChunkSize, limit, toViewQueue, toDispatcherQueue)
+			core.Backup(args.SrcDir, args.DistDir, args.Password, args.ChunkSize, limit, toViewQueue, toManagerQueue)
 		} else {
-			core.Restore(args.SrcDir, args.DistDir, args.Password, limit, toViewQueue, toDispatcherQueue)
+			core.Restore(args.SrcDir, args.DistDir, args.Password, limit, toViewQueue, toManagerQueue)
 		}
 		wg.Wait()
 	}

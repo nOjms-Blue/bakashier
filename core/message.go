@@ -2,32 +2,34 @@ package core
 
 
 // ディスパッチャが扱うメッセージの種類。
-type workerToDispatcherMessageType string
+type workerToManagerMessageType string
+
 const (
-	FIND_DIR    workerToDispatcherMessageType = "FIND_DIR"   // 処理対象ディレクトリの通知
-	FINISH_JOB  workerToDispatcherMessageType = "FINISH_JOB" // ジョブ完了通知
-	ERROR       workerToDispatcherMessageType = "ERROR"      // エラー報告
+	FIND_DIR   workerToManagerMessageType = "FIND_DIR"   // 処理対象ディレクトリの通知
+	FINISH_JOB workerToManagerMessageType = "FINISH_JOB" // ジョブ完了通知
+	ERROR      workerToManagerMessageType = "ERROR"      // エラー報告
 )
 
 // ワーカーが受け取るメッセージの種類。
-type dispatcherToWorkerMessageType string
+type managerToWorkerMessageType string
+
 const (
-	NEXT_JOB    dispatcherToWorkerMessageType = "NEXT_JOB" // 次の処理ジョブ
-	EXIT        dispatcherToWorkerMessageType = "EXIT"     // ワーカー終了指示
+	NEXT_JOB managerToWorkerMessageType = "NEXT_JOB" // 次の処理ジョブ
+	EXIT     managerToWorkerMessageType = "EXIT"     // ワーカー終了指示
 )
 
 // ディスパッチャに渡すメッセージ。
-type messageFromWorkerToDispatcher struct {
+type messageFromWorkerToManager struct {
 	WorkerId uint
-	MsgType workerToDispatcherMessageType
-	SrcDir  string
-	DistDir string
-	Detail  string
+	MsgType  workerToManagerMessageType
+	SrcDir   string
+	DistDir  string
+	Detail   string
 }
 
 // ワーカーに渡すジョブまたは終了指示。
-type messageFromDispatcherToWorker struct {
-	MsgType dispatcherToWorkerMessageType
+type messageFromManagerToWorker struct {
+	MsgType managerToWorkerMessageType
 	SrcDir  string
 	DistDir string
 	Detail  string
