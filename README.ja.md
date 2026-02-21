@@ -108,6 +108,9 @@ scripts\install.bat
 ## 使用している OSS ライブラリ
 
 - Go Standard Library
+- `github.com/charmbracelet/bubbletea` (`v1.3.10`)
+- `github.com/charmbracelet/bubbles` (`v1.0.0`)
+- `github.com/charmbracelet/lipgloss` (`v1.1.0`)
 - `golang.org/x/crypto` (`v0.47.0`)
 
 ライセンス情報は `NOTICE` を参照してください。

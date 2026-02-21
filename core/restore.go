@@ -4,41 +4,114 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"sync"
 	"time"
-	
+
 	"bakashier/data"
+	"bakashier/view"
 )
 
 
 // ディスパッチャキューからメッセージを受け取り、ワーカーにジョブを配分する。
 // 全ジョブ完了後に各ワーカーに EXIT を送って終了する。
-func restoreDispatcher(workers int, dispatcherQueue <-chan dispatcherMessage, workerQueue chan<- workerMessage, wg *sync.WaitGroup) {
+func restoreManager(workers int, fromWorkerQueue <-chan messageFromWorkerToManager, toWorkerQueue chan messageFromManagerToWorker, toViewQueue chan<- view.MessageToView, fromViewQueue <-chan view.MessageToManager, wg *sync.WaitGroup) {
 	defer wg.Done()
+	defer func() {
+		toViewQueue <- view.MessageToView{
+			Source:   view.MANAGER,
+			MsgType:  view.FINISHED,
+			WorkerId: 0,
+			Detail:   "",
+		}
+	}()
 	
 	var untreated int = 0
-	var untreatedMessage = []workerMessage{}
+	var untreatedMessage = []messageFromManagerToWorker{}
+	var stopWorkers bool = false
+	var termination bool = false
 	for {
-		msg := <-dispatcherQueue
-		
-		switch msg.MsgType {
-		case FIND_DIR:
-			untreatedMessage = append(untreatedMessage, workerMessage{
-				MsgType: NEXT_JOB,
-				SrcDir:  msg.SrcDir,
-				DistDir: msg.DistDir,
-				Detail:  msg.Detail,
-			})
-			untreated++
-		case FINISH_JOB:
-			untreated--
-		case ERROR:
-			fmt.Println(msg.Detail)
+		select {
+		case msg := <-fromViewQueue:
+			// ビューからのメッセージを処理する
+			switch msg.MsgType {
+			case view.STOP_WORKERS:
+				stopWorkers = true
+			case view.RESUME_WORKERS:
+				stopWorkers = false
+			case view.TERMINATION:
+				termination = true
+			}
+		case msg := <-fromWorkerQueue:
+			// ワーカーからのメッセージを処理する
+			switch msg.MsgType {
+			case FIND_DIR:
+				untreatedMessage = append(untreatedMessage, messageFromManagerToWorker{
+					MsgType: NEXT_JOB,
+					SrcDir:  msg.SrcDir,
+					DistDir: msg.DistDir,
+					Detail:  msg.Detail,
+				})
+				untreated++
+			case FINISH_JOB:
+				untreated--
+			case ERROR:
+				toViewQueue <- view.MessageToView{
+					Source:   view.MANAGER,
+					MsgType:  view.ERROR,
+					WorkerId: msg.WorkerId,
+					Detail:   msg.Detail,
+				}
+			}
+		default:
 		}
 		
+		// 一時停止中の場合は、ワーカーに送ったメッセージをすべて未処理に移動
+		if stopWorkers {
+			func() {
+				for {
+					select {
+					case msg := <-toWorkerQueue:
+						untreatedMessage = append(untreatedMessage, msg)
+					default:
+						return
+					}
+				}
+			}()
+		}
+		
+		// 終了指示が来た場合は、ワーカーに送ったメッセージをすべて破棄して終了指示を送る
+		if termination {
+			func() {
+				for {
+					select {
+					case msg := <-toWorkerQueue:
+						if msg.MsgType != EXIT {
+							untreated--
+						}
+					default:
+						return
+					}
+				}
+			}()
+			messages := len(untreatedMessage)
+			untreatedMessage = make([]messageFromManagerToWorker, 0)
+			untreated -= messages
+			
+			for i := 0; i < untreated; i++ {
+				toWorkerQueue <- messageFromManagerToWorker{
+					MsgType: EXIT,
+					SrcDir:  "",
+					DistDir: "",
+					Detail:  "",
+				}
+			}
+		}
+		
+		// 全ジョブが完了した場合は、各ワーカーに EXIT を送って終了
 		if untreated <= 0 {
 			for i := 0; i < workers; i++ {
-				workerQueue <- workerMessage{
+				toWorkerQueue <- messageFromManagerToWorker{
 					MsgType: EXIT,
 					SrcDir:  "",
 					DistDir: "",
@@ -48,16 +121,26 @@ func restoreDispatcher(workers int, dispatcherQueue <-chan dispatcherMessage, wo
 			break
 		}
 		
+		// ジョブの配分
 		for {
-			if len(dispatcherQueue) != 0 { break }
+			// メッセージが来た場合は、受信メッセージを先に処理する
+			if len(fromViewQueue) != 0 { break }
+			if len(fromWorkerQueue) != 0 { break }
 			if len(untreatedMessage) == 0 { break }
 			
+			// 一時停止中または終了指示が来た場合は、ジョブを配分しない
+			if stopWorkers || termination {
+				time.Sleep(10 * time.Millisecond)
+				break
+			}
+			
+			// 未処理のジョブを配分する
 			msg := untreatedMessage[0]
 			select {
-				case workerQueue <- msg:
-					untreatedMessage = untreatedMessage[1:]
-				default:
-					time.Sleep(10 * time.Millisecond)
+			case toWorkerQueue <- msg:
+				untreatedMessage = untreatedMessage[1:]
+			default:
+				time.Sleep(10 * time.Millisecond)
 			}
 		}
 	}
@@ -65,22 +148,39 @@ func restoreDispatcher(workers int, dispatcherQueue <-chan dispatcherMessage, wo
 
 // ワーカーキューからジョブを受け取り、_directory_.bks と .bks ファイルから復元する。
 // ディレクトリエントリに従い、隠し名の .bks を復号して実名で distDir に書き出す。
-func restoreWorker(password string, dispatcherQueue chan<- dispatcherMessage, workerQueue <-chan workerMessage, wg *sync.WaitGroup, limit Limit) {
+func restoreWorker(workerId uint, password string, toManagerQueue chan<- messageFromWorkerToManager, fromManagerQueue <-chan messageFromManagerToWorker, toViewQueue chan<- view.MessageToView, wg *sync.WaitGroup, limit Limit) {
 	defer wg.Done()
-	
 	var processedSize uint64 = 0
 	
+	toViewQueue <- view.MessageToView{
+		Source:   view.WORKER,
+		MsgType:  view.ADD_WORKER,
+		WorkerId: workerId,
+		Detail:   "",
+	}
+	
 	for {
-		queue := <-workerQueue
+		queue := <-fromManagerQueue
 		if queue.MsgType == EXIT { break }
 		
 		var errHandler = func(prefix string, err error) {
-			dispatcherQueue <- dispatcherMessage{
-				MsgType: ERROR,
-				SrcDir:  queue.SrcDir,
-				DistDir: queue.DistDir,
-				Detail:  fmt.Sprintf("%s: %s", prefix, err.Error()),
+			toManagerQueue <- messageFromWorkerToManager{
+				WorkerId: workerId,
+				MsgType:  ERROR,
+				SrcDir:   queue.SrcDir,
+				DistDir:  queue.DistDir,
+				Detail:   fmt.Sprintf("%s: %s", prefix, err.Error()),
 			}
+		}
+		
+		// ディレクトリ処理開始をビューに通知
+		toViewQueue <- view.MessageToView{
+			Source:   view.WORKER,
+			MsgType:  view.START_DIR,
+			WorkerId: workerId,
+			SrcPath:  queue.SrcDir,
+			DistPath: queue.DistDir,
+			Detail:   "",
 		}
 		
 		func() {
@@ -90,6 +190,7 @@ func restoreWorker(password string, dispatcherQueue chan<- dispatcherMessage, wo
 				return
 			}
 			
+			// _directory_.bks からエントリ一覧を読み込む。
 			directoryEntryFile := filepath.Join(queue.SrcDir, "_directory_.bks")
 			entries, err := loadDirectoryEntries(directoryEntryFile, password)
 			if err != nil {
@@ -97,6 +198,7 @@ func restoreWorker(password string, dispatcherQueue chan<- dispatcherMessage, wo
 				return
 			}
 			
+			// リストアを実行
 			for _, entry := range entries {
 				switch entry.Type {
 				case data.Directory:
@@ -108,46 +210,110 @@ func restoreWorker(password string, dispatcherQueue chan<- dispatcherMessage, wo
 						return
 					}
 					
-					dispatcherQueue <- dispatcherMessage{
-						MsgType: FIND_DIR,
-						SrcDir:  hiddenDir,
-						DistDir: realDir,
-						Detail:  "",
+					// 子ディレクトリの発見をディスパッチャに通知
+					toManagerQueue <- messageFromWorkerToManager{
+						WorkerId: workerId,
+						MsgType:  FIND_DIR,
+						SrcDir:   hiddenDir,
+						DistDir:  realDir,
+						Detail:   "",
 					}
-					fmt.Printf("Found directory: %c%s%c -> %c%s%c\n", '"', hiddenDir, '"', '"', realDir, '"')
 				case data.File:
 					archiveFile := filepath.Join(queue.SrcDir, fmt.Sprintf("%s.bks", entry.HideName))
 					
-					err, realFile := data.ImportStreamArchive(archiveFile, queue.DistDir, password)
-					if err != nil {
-						errHandler("Failed to import stream archive", err)
-						return
+					// ファイル処理開始をビューに通知
+					toViewQueue <- view.MessageToView{
+						Source:   view.WORKER,
+						MsgType:  view.START_FILE,
+						WorkerId: workerId,
+						SrcPath:  archiveFile,
+						DistPath: filepath.Join(queue.DistDir, entry.RealName),
+						Detail:   "",
 					}
-					_ = os.Chtimes(realFile, time.Now(), entry.ModTime)
 					
-					fmt.Printf("File restored: %c%s%c -> %c%s%c\n", '"', filepath.Join(queue.SrcDir, fmt.Sprintf("%s.bks", entry.HideName)), '"', '"', realFile, '"')
-					
-					if limit.Size > 0 && limit.Wait > 0 {
-						processedSize += uint64(entry.Size)
-						if limit.Size > 0 && processedSize >= limit.Size {
-							time.Sleep(time.Duration(limit.Wait) * time.Second)
-							processedSize = processedSize - limit.Size
+					func() {
+						err, realFile := data.ImportStreamArchive(archiveFile, queue.DistDir, password)
+						if err != nil {
+							errHandler("Failed to import stream archive", err)
+							return
 						}
+						_ = os.Chtimes(realFile, time.Now(), entry.ModTime)
+						
+						if limit.Size > 0 && limit.Wait > 0 {
+							processedSize += uint64(entry.Size)
+							if limit.Size > 0 && processedSize >= limit.Size {
+								time.Sleep(time.Duration(limit.Wait) * time.Second)
+								processedSize = processedSize - limit.Size
+							}
+						}
+					}()
+					
+					// ファイル処理完了をビューに通知
+					toViewQueue <- view.MessageToView{
+						Source:   view.WORKER,
+						MsgType:  view.FINISH_FILE,
+						WorkerId: workerId,
+						SrcPath:  archiveFile,
+						DistPath: filepath.Join(queue.DistDir, entry.RealName),
+						Detail:   "",
 					}
 				default:
 					errHandler("Unknown entry type", fmt.Errorf("%v", entry.Type))
 					return
 				}
 			}
-			
-			fmt.Printf("Successfully directory restored: %c%s%c\n", '"', queue.SrcDir, '"')
 		}()
 		
-		dispatcherQueue <- dispatcherMessage{
-			MsgType: FINISH_JOB,
-			SrcDir:  queue.SrcDir,
-			DistDir: queue.DistDir,
-			Detail:  "",
+		// ディレクトリ処理完了をビューに通知
+		toViewQueue <- view.MessageToView{
+			Source:   view.WORKER,
+			MsgType:  view.FINISH_DIR,
+			WorkerId: workerId,
+			SrcPath:  queue.SrcDir,
+			DistPath: queue.DistDir,
+			Detail:   "",
+		}
+		
+		// ディレクトリ処理完了をディスパッチャに通知
+		toManagerQueue <- messageFromWorkerToManager{
+			WorkerId: workerId,
+			MsgType:  FINISH_JOB,
+			SrcDir:   queue.SrcDir,
+			DistDir:  queue.DistDir,
+			Detail:   "",
 		}
 	}
+}
+
+// srcDir（バックアップ先）から distDir へ復元する。
+// ディスパッチャ1つとワーカー4つを起動し、チャネルでジョブを分配する。
+func Restore(srcDir string, distDir string, password string, limit Limit, toViewQueue chan<- view.MessageToView, fromViewQueue <-chan view.MessageToManager) {
+	var wg sync.WaitGroup
+	var workers int = runtime.GOMAXPROCS(0)
+	var queueSize int = workers * 8
+	
+	if workers <= 0 {
+		workers = 1
+		queueSize = 8
+	}
+	
+	workerToManagerQueue := make(chan messageFromWorkerToManager, queueSize)
+	managerToWorkerQueue := make(chan messageFromManagerToWorker, queueSize)
+	
+	workerToManagerQueue <- messageFromWorkerToManager{
+		MsgType: FIND_DIR,
+		SrcDir:  srcDir,
+		DistDir: distDir,
+		Detail:  "",
+	}
+	
+	wg.Add(workers + 1)
+	go restoreManager(workers, workerToManagerQueue, managerToWorkerQueue, toViewQueue, fromViewQueue, &wg)
+	for i := uint(0); i < uint(workers); i++ {
+		go restoreWorker(i+1, password, workerToManagerQueue, managerToWorkerQueue, toViewQueue, &wg, limit)
+	}
+	wg.Wait()
+	
+	close(workerToManagerQueue)
+	close(managerToWorkerQueue)
 }

@@ -10,7 +10,7 @@ import (
 // コマンドラインの使い方を標準出力に表示する。
 func Usage() {
 	fmt.Println("Usage:")
-	fmt.Printf("  %s [--backup|-b|--restore|-r] [src_dir] [dist_dir] --password|-p [password]\n", constants.APP_NAME)
+	fmt.Printf("  %s [--backup|-b|--restore|-r] [src_dir] [dist_dir]\n", constants.APP_NAME)
 	fmt.Printf("  %s [--help|-h|--version|-v]\n", constants.APP_NAME)
 	fmt.Println("")
 	fmt.Println("  --backup, -b      Run backup")

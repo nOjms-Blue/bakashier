@@ -134,9 +134,6 @@ func ParseArgs(args []string) (ParsedArgs, error) {
 	if mode == "" {
 		return ParsedArgs{}, fmt.Errorf("backup or restore mode is required")
 	}
-	if password == "" {
-		return ParsedArgs{}, fmt.Errorf("password is required")
-	}
 	if len(positional) < 2 {
 		return ParsedArgs{}, fmt.Errorf("src_dir and dist_dir are required")
 	}
