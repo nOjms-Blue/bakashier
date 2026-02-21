@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 	
@@ -96,8 +97,8 @@ func backupWorker(password string, dispatcherQueue chan<- dispatcherMessage, wor
 				return
 			}
 			
-			nameMap := make(map[string]string)
-			newEntries := make(map[string]data.DirectoryEntry)
+			nameMap := make(map[string]string) // [HideName]RealName
+			newEntries := make(map[string]data.DirectoryEntry) // [HideName]DirectoryEntry
 			directoryEntryFile := filepath.Join(queue.DistDir, "_directory_.bks")
 			
 			// 既存の _directory_.bks が存在しない場合は、中断されたバックアップを削除する。
@@ -149,8 +150,10 @@ func backupWorker(password string, dispatcherQueue chan<- dispatcherMessage, wor
 						ModTime: time.Now(),
 					}
 					
-					// 既存のエントリと異なる場合は変更があると判定
+					// 既存のエントリと異なる場合は変更があると判定 または バックアップ先にディレクトリが存在しない場合は変更があると判定
 					if entry.Type != data.Directory || entry.RealName != file.Name() {
+						isExistChanges = true
+					} else if _, err := os.Stat(filepath.Join(queue.DistDir, hideName)); err != nil {
 						isExistChanges = true
 					}
 					
@@ -164,21 +167,34 @@ func backupWorker(password string, dispatcherQueue chan<- dispatcherMessage, wor
 					
 					fmt.Printf("Found directory: %c%s%c\n", '"', filepath.Join(queue.SrcDir, file.Name()), '"')
 				} else {
+					isNotChangeFile := false
 					fileInfo, err := file.Info()
 					if err != nil {
 						errHandler("Failed to get file info", err)
 						continue
 					}
 					
-					// 変更がない場合はスキップ
+					// 変更がないか
 					if (entry.Type == data.File) {
 						if (entry.Size == uint64(fileInfo.Size()) && entry.ModTime.Equal(fileInfo.ModTime())) {
-							newEntries[hideName] = entry
-							continue
+							isNotChangeFile = true
 						}
 					}
-					isExistChanges = true
 					
+					// バックアップ先にファイルが存在しない場合は変更があると判定
+					if isNotChangeFile {
+						if _, err := os.Stat(filepath.Join(queue.DistDir, fmt.Sprintf("%s.bks", hideName))); err != nil {
+							isNotChangeFile = false
+						}
+					}
+					
+					// 変更がない場合はスキップ
+					if isNotChangeFile {
+						newEntries[hideName] = entry
+						continue
+					}
+					
+					// ファイルをバックアップ
 					srcFile := filepath.Join(queue.SrcDir, file.Name())
 					archiveFile := filepath.Join(queue.DistDir, fmt.Sprintf("%s.bks", hideName))
 					err = data.ExportStreamArchive(srcFile, archiveFile, file.Name(), password, chunkSize)
@@ -219,6 +235,45 @@ func backupWorker(password string, dispatcherQueue chan<- dispatcherMessage, wor
 							os.RemoveAll(filepath.Join(queue.DistDir, entry.HideName))
 							fmt.Printf("Directory deleted: %c%s%c\n", '"', filepath.Join(queue.DistDir, entry.HideName), '"')
 						}
+					}
+				}
+			}
+			
+			// エントリに存在しないバックアップファイルを削除
+			dstFiles, err := os.ReadDir(queue.DistDir)
+			if err != nil {
+				errHandler("Failed to read backup directory", err)
+				return
+			}
+			for _, dstFile := range dstFiles {
+				isExist := false
+				// ファイル名の先頭と末尾が_の場合はスキップ
+				if !dstFile.IsDir() {
+					name := strings.ToLower(dstFile.Name())
+					if strings.HasPrefix(name, "_") && strings.HasSuffix(name, "_.bks") {
+						continue
+					}
+				}
+				
+				for _, entry := range newEntries {
+					if entry.Type == data.File {
+						if fmt.Sprintf("%s.bks", entry.HideName) == dstFile.Name() {
+							isExist = true
+							break
+						}
+					} else {
+						if entry.HideName == dstFile.Name() {
+							isExist = true
+							break
+						}
+					}
+				}
+				
+				if !isExist {
+					if dstFile.IsDir() {
+						os.RemoveAll(filepath.Join(queue.DistDir, dstFile.Name()))
+					} else {
+						os.Remove(filepath.Join(queue.DistDir, dstFile.Name()))
 					}
 				}
 			}
