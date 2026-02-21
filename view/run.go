@@ -7,7 +7,7 @@ import (
 )
 
 
-func NewProgram(mode cli.ModeType, receiveQueue <-chan MessageToView, sendQueue chan<- MessageToManager) *tea.Program {
+func Run(mode cli.ModeType, receiveQueue <-chan MessageToView, sendQueue chan<- MessageToManager) (model, error) {
 	m := model{
 		mode:         mode,
 		stop:         false,
@@ -16,5 +16,7 @@ func NewProgram(mode cli.ModeType, receiveQueue <-chan MessageToView, sendQueue 
 		receiveQueue: receiveQueue,
 		sendQueue:    sendQueue,
 	}
-	return tea.NewProgram(m)
+	program := tea.NewProgram(m)
+	rm, err := program.Run()
+	return rm.(model), err
 }

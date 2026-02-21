@@ -25,7 +25,7 @@ type model struct {
 	stop         bool
 	quit         bool
 	workers      map[uint]workerStatus // 各ワーカーの状態
-	errorLog     []string              // エラーログ
+	ErrorLog     []string              // エラーログ
 	receiveQueue <-chan MessageToView
 	sendQueue    chan<- MessageToManager
 }
@@ -84,10 +84,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.workers[msg.WorkerId] = status
 			}
 		case ERROR:
-			m.errorLog = append(m.errorLog, msg.Detail)
-			if len(m.errorLog) > MAX_ERROR_LOGS {
-				m.errorLog = m.errorLog[1:]
-			}
+			m.ErrorLog = append(m.ErrorLog, msg.Detail)
 		case FINISHED:
 			return m, tea.Quit
 		}
@@ -153,8 +150,12 @@ func (m model) View() string {
 	b.WriteString("--------------------\n")
 	
 	for i := 0; i < MAX_ERROR_LOGS; i++ {
-		if i < len(m.errorLog) {
-			b.WriteString(red.Render(m.errorLog[i]))
+		if len(m.ErrorLog) < MAX_ERROR_LOGS {
+			if i < len(m.ErrorLog) {
+				b.WriteString(red.Render(m.ErrorLog[i]))
+			}
+		} else {
+			b.WriteString(red.Render(m.ErrorLog[len(m.ErrorLog) - (MAX_ERROR_LOGS - i)]))
 		}
 		b.WriteString("\n")
 	}

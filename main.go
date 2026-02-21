@@ -35,15 +35,20 @@ func main() {
 		wg := sync.WaitGroup{}
 		toViewQueue := make(chan view.MessageToView, 64)
 		toManagerQueue := make(chan view.MessageToManager, 64)
-		program := view.NewProgram(args.Mode, toViewQueue, toManagerQueue)
 		
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			_, err := program.Run()
+			model, err := view.Run(args.Mode, toViewQueue, toManagerQueue)
 			if err != nil {
 				fmt.Println(err.Error())
 				return
+			}
+			
+			if len(model.ErrorLog) > 0 {
+				for _, e := range model.ErrorLog {
+					fmt.Println(e)
+				}
 			}
 		}()
 		if args.Mode == cli.ModeBackup {
