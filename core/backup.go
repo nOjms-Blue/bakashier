@@ -305,6 +305,7 @@ func backupWorker(workerId uint, password string, toManagerQueue chan<- messageF
 							newEntries[hideName] = entry
 							return
 						}
+						isExistChanges = true
 						
 						// ファイルをバックアップ
 						srcFile := filepath.Join(queue.SrcDir, file.Name())
