@@ -4,18 +4,17 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"runtime"
 	"sync"
 	"time"
-
+	
 	"bakashier/data"
 	"bakashier/view"
 )
 
 
-// ディスパッチャキューからメッセージを受け取り、ワーカーにジョブを配分する。
+// キューからメッセージを受け取り、ワーカーにジョブを配分する。
 // 全ジョブ完了後に各ワーカーに EXIT を送って終了する。
-func restoreManager(workers int, fromWorkerQueue <-chan messageFromWorkerToManager, toWorkerQueue chan messageFromManagerToWorker, toViewQueue chan<- view.MessageToView, fromViewQueue <-chan view.MessageToManager, wg *sync.WaitGroup) {
+func restoreManager(workers uint32, fromWorkerQueue <-chan messageFromWorkerToManager, toWorkerQueue chan messageFromManagerToWorker, toViewQueue chan<- view.MessageToView, fromViewQueue <-chan view.MessageToManager, wg *sync.WaitGroup) {
 	defer wg.Done()
 	defer func() {
 		toViewQueue <- view.MessageToView{
@@ -110,7 +109,7 @@ func restoreManager(workers int, fromWorkerQueue <-chan messageFromWorkerToManag
 		
 		// 全ジョブが完了した場合は、各ワーカーに EXIT を送って終了
 		if untreated <= 0 {
-			for i := 0; i < workers; i++ {
+			for i := uint32(0); i < workers; i++ {
 				toWorkerQueue <- messageFromManagerToWorker{
 					MsgType: EXIT,
 					SrcDir:  "",
@@ -148,7 +147,7 @@ func restoreManager(workers int, fromWorkerQueue <-chan messageFromWorkerToManag
 
 // ワーカーキューからジョブを受け取り、_directory_.bks と .bks ファイルから復元する。
 // ディレクトリエントリに従い、隠し名の .bks を復号して実名で distDir に書き出す。
-func restoreWorker(workerId uint, password string, toManagerQueue chan<- messageFromWorkerToManager, fromManagerQueue <-chan messageFromManagerToWorker, toViewQueue chan<- view.MessageToView, wg *sync.WaitGroup, limit Limit) {
+func restoreWorker(workerId uint, password string, toManagerQueue chan<- messageFromWorkerToManager, fromManagerQueue <-chan messageFromManagerToWorker, toViewQueue chan<- view.MessageToView, wg *sync.WaitGroup, limit SettingsLimit) {
 	defer wg.Done()
 	var processedSize uint64 = 0
 	
@@ -286,12 +285,12 @@ func restoreWorker(workerId uint, password string, toManagerQueue chan<- message
 }
 
 // srcDir（バックアップ先）から distDir へ復元する。
-// ディスパッチャ1つとワーカー4つを起動し、チャネルでジョブを分配する。
-func Restore(srcDir string, distDir string, password string, limit Limit, toViewQueue chan<- view.MessageToView, fromViewQueue <-chan view.MessageToManager) {
+// マネージャ1つと複数のワーカーを起動し、チャネルでジョブを分配する。
+func Restore(settings Settings, toViewQueue chan<- view.MessageToView, fromViewQueue <-chan view.MessageToManager) {
 	var wg sync.WaitGroup
-	var workers int = runtime.GOMAXPROCS(0)
-	var queueSize int = workers * 8
 	
+	workers := settings.Workers
+	queueSize := workers * 8
 	if workers <= 0 {
 		workers = 1
 		queueSize = 8
@@ -302,15 +301,15 @@ func Restore(srcDir string, distDir string, password string, limit Limit, toView
 	
 	workerToManagerQueue <- messageFromWorkerToManager{
 		MsgType: FIND_DIR,
-		SrcDir:  srcDir,
-		DistDir: distDir,
+		SrcDir:  settings.SrcDir,
+		DistDir: settings.DistDir,
 		Detail:  "",
 	}
 	
-	wg.Add(workers + 1)
+	wg.Add(int(workers) + 1)
 	go restoreManager(workers, workerToManagerQueue, managerToWorkerQueue, toViewQueue, fromViewQueue, &wg)
 	for i := uint(0); i < uint(workers); i++ {
-		go restoreWorker(i+1, password, workerToManagerQueue, managerToWorkerQueue, toViewQueue, &wg, limit)
+		go restoreWorker(i+1, settings.Password, workerToManagerQueue, managerToWorkerQueue, toViewQueue, &wg, settings.Limit)
 	}
 	wg.Wait()
 	
