@@ -19,4 +19,5 @@ type ParsedArgs struct {
 	ChunkSize uint64
 	LimitSize uint64
 	LimitWait uint64
+	Workers   uint32
 }

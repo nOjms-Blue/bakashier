@@ -3,6 +3,7 @@ package cli
 import (
 	"fmt"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 	
@@ -47,6 +48,7 @@ func ParseArgs(args []string) (ParsedArgs, error) {
 	var srcDir string
 	var distDir string
 	var password string
+	var workers uint32 = uint32(0)      // 0 = 未指定（デフォルト使用）
 	var chunkSizeMiB uint64 = uint64(0) // 0 = 未指定（デフォルト使用）
 	var limitSizeMiB uint64 = uint64(0) // 0 = 未指定（デフォルト使用）
 	var limitWaitSec uint64 = uint64(0) // 0 = 未指定（デフォルト使用）
@@ -75,6 +77,20 @@ func ParseArgs(args []string) (ParsedArgs, error) {
 				return ParsedArgs{}, fmt.Errorf("password value is required")
 			}
 			password = next
+			i++
+		case "--workers", "-w":
+			if i+1 >= len(args) {
+				return ParsedArgs{}, fmt.Errorf("workers value is required")
+			}
+			workersArg := args[i+1]
+			if len(workersArg) == 0 || workersArg[0] == '-' {
+				return ParsedArgs{}, fmt.Errorf("workers value is required")
+			}
+			parsed, err := strconv.ParseUint(workersArg, 10, 32)
+			if err != nil || parsed == 0 {
+				return ParsedArgs{}, fmt.Errorf("workers must be a positive integer")
+			}
+			workers = uint32(parsed)
 			i++
 		case "--chunk", "-c":
 			if i+1 >= len(args) {
@@ -156,6 +172,11 @@ func ParseArgs(args []string) (ParsedArgs, error) {
 		}
 	}
 	
+	// ワーカー数を設定する。
+	if workers == 0 {
+		workers = uint32(runtime.GOMAXPROCS(0))
+	}
+	
 	// チャンクサイズを設定する。
 	chunkSize := data.ChunkSize
 	if chunkSizeMiB > 0 {
@@ -170,6 +191,7 @@ func ParseArgs(args []string) (ParsedArgs, error) {
 		SrcDir:    srcDir,
 		DistDir:   distDir,
 		Password:  password,
+		Workers:   workers,
 		ChunkSize: chunkSize,
 		LimitSize: limitSizeMiB,
 		LimitWait: limitWaitSec,

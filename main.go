@@ -21,15 +21,22 @@ func main() {
 		os.Exit(1)
 	}
 	
-	limit := core.Limit{Size: args.LimitSize, Wait: args.LimitWait}
+	settings := core.Settings{
+		SrcDir: args.SrcDir,
+		DistDir: args.DistDir,
+		Password: args.Password,
+		Workers: args.Workers,
+		ChunkSize: args.ChunkSize,
+		Limit: core.SettingsLimit{Size: args.LimitSize, Wait: args.LimitWait},
+	}
 	run := func() {
-		if args.Password == "" {
+		if settings.Password == "" {
 			input, err := cli.InputPassword()
 			if err != nil {
 				fmt.Println(err.Error())
 				os.Exit(1)
 			}
-			args.Password = input
+			settings.Password = input
 		}
 		
 		wg := sync.WaitGroup{}
@@ -52,9 +59,9 @@ func main() {
 			}
 		}()
 		if args.Mode == cli.ModeBackup {
-			core.Backup(args.SrcDir, args.DistDir, args.Password, args.ChunkSize, limit, toViewQueue, toManagerQueue)
+			core.Backup(settings, toViewQueue, toManagerQueue)
 		} else {
-			core.Restore(args.SrcDir, args.DistDir, args.Password, limit, toViewQueue, toManagerQueue)
+			core.Restore(settings, toViewQueue, toManagerQueue)
 		}
 		wg.Wait()
 	}

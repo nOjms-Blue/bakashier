@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"sync"
 	"time"
@@ -15,9 +14,9 @@ import (
 )
 
 
-// ディスパッチャキューからメッセージを受け取り、ワーカーにジョブを配分する。
+// キューからメッセージを受け取り、ワーカーにジョブを配分する。
 // FIND_DIR でジョブを投入し、全ジョブが FINISH_JOB で完了すると各ワーカーに EXIT を送る。
-func backupManager(workers int, fromWorkerQueue <-chan messageFromWorkerToManager, toWorkerQueue chan messageFromManagerToWorker, toViewQueue chan<- view.MessageToView, fromViewQueue <-chan view.MessageToManager, wg *sync.WaitGroup) {
+func backupManager(workers uint32, fromWorkerQueue <-chan messageFromWorkerToManager, toWorkerQueue chan messageFromManagerToWorker, toViewQueue chan<- view.MessageToView, fromViewQueue <-chan view.MessageToManager, wg *sync.WaitGroup) {
 	defer wg.Done()
 	defer func() {
 		toViewQueue <- view.MessageToView{
@@ -113,7 +112,7 @@ func backupManager(workers int, fromWorkerQueue <-chan messageFromWorkerToManage
 		
 		// 全ジョブが完了した場合は、各ワーカーに EXIT を送って終了
 		if untreated <= 0 {
-			for i := 0; i < workers; i++ {
+			for i := uint32(0); i < workers; i++ {
 				toWorkerQueue <- messageFromManagerToWorker{
 					MsgType: EXIT,
 					SrcDir:  "",
@@ -151,7 +150,7 @@ func backupManager(workers int, fromWorkerQueue <-chan messageFromWorkerToManage
 
 // ワーカーキューからジョブを受け取り、ディレクトリを走査してファイルをアーカイブする。
 // 既存の _directory_.bks を読み、変更のないファイルはスキップする。ディレクトリは FIND_DIR で再投入する。
-func backupWorker(workerId uint, password string, toManagerQueue chan<- messageFromWorkerToManager, fromManagerQueue <-chan messageFromManagerToWorker, toViewQueue chan<- view.MessageToView, wg *sync.WaitGroup, chunkSize uint64, limit Limit) {
+func backupWorker(workerId uint, password string, toManagerQueue chan<- messageFromWorkerToManager, fromManagerQueue <-chan messageFromManagerToWorker, toViewQueue chan<- view.MessageToView, wg *sync.WaitGroup, chunkSize uint64, limit SettingsLimit) {
 	defer wg.Done()
 	var processedSize uint64 = 0
 	
@@ -306,6 +305,7 @@ func backupWorker(workerId uint, password string, toManagerQueue chan<- messageF
 							newEntries[hideName] = entry
 							return
 						}
+						isExistChanges = true
 						
 						// ファイルをバックアップ
 						srcFile := filepath.Join(queue.SrcDir, file.Name())
@@ -441,13 +441,13 @@ func backupWorker(workerId uint, password string, toManagerQueue chan<- messageF
 	}
 }
 
-// srcDir を暗号化・圧縮して distDir にバックアップする。
-// ディスパッチャ1つとワーカー4つを起動し、チャネルでジョブを分配する。
-func Backup(srcDir string, distDir string, password string, chunkSize uint64, limit Limit, toViewQueue chan<- view.MessageToView, fromViewQueue <-chan view.MessageToManager) {
+// settings.SrcDir を暗号化・圧縮して settings.DistDir にバックアップする。
+// マネージャ1つと複数のワーカーを起動し、チャネルでジョブを分配する。
+func Backup(settings Settings, toViewQueue chan<- view.MessageToView, fromViewQueue <-chan view.MessageToManager) {
 	var wg sync.WaitGroup
-	var workers int = runtime.GOMAXPROCS(0)
-	var queueSize int = workers * 8
 	
+	workers := settings.Workers
+	queueSize := workers * 8
 	if workers <= 0 {
 		workers = 1
 		queueSize = 8
@@ -458,15 +458,15 @@ func Backup(srcDir string, distDir string, password string, chunkSize uint64, li
 	
 	workerToManagerQueue <- messageFromWorkerToManager{
 		MsgType: FIND_DIR,
-		SrcDir:  srcDir,
-		DistDir: distDir,
+		SrcDir:  settings.SrcDir,
+		DistDir: settings.DistDir,
 		Detail:  "",
 	}
 	
-	wg.Add(workers + 1)
+	wg.Add(int(workers) + 1)
 	go backupManager(workers, workerToManagerQueue, managerToWorkerQueue, toViewQueue, fromViewQueue, &wg)
 	for i := uint(0); i < uint(workers); i++ {
-		go backupWorker(i+1, password, workerToManagerQueue, managerToWorkerQueue, toViewQueue, &wg, chunkSize, limit)
+		go backupWorker(i+1, settings.Password, workerToManagerQueue, managerToWorkerQueue, toViewQueue, &wg, settings.ChunkSize, settings.Limit)
 	}
 	wg.Wait()
 	
