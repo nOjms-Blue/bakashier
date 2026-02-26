@@ -17,6 +17,7 @@ func Usage() {
 	fmt.Println("  --restore, -r     Run restore")
 	fmt.Println("  --password, -p    Required password")
 	fmt.Println("  --chunk, -c       Chunk size in MiB for backup (default: 16)")
+	fmt.Println("  --workers, -w     Number of workers for backup (default: number of cpu threads)")
 	fmt.Println("  --limit-size, -ls Limit size in MiB for backup (default: 0)")
 	fmt.Println("  --limit-wait, -lw Limit wait in seconds for backup (default: 0)")
 	fmt.Println("  --help, -h        Show help")
