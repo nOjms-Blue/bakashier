@@ -19,19 +19,31 @@ type ArchiveData struct {
 	Data []ArchiveEntry
 }
 
+const SimpleArchiveMaxSize = 4 * 1024 * 1024 * 1024 // 4GiB
+
 var ImportArchiveTooShort = errors.New("file is too short")
 var ImportArchiveNotValid = errors.New("file is not a valid archived file")
 var ImportArchiveUnsupportedVersion = errors.New("unsupported version number")
+var ImportArchiveTooLarge = errors.New("file is too large")
 
 // fileName の .bks ファイルを読み、ヘッダー検証と CRC32 チェック後に d に格納する。
 // フォーマット: "BKS" + version(2) + nameLen(4) + name + CRC32(4) + dataLen(8) + data + CRC32(4) + dataLen(8) + data + CRC32(4) + ...
 func (d *ArchiveData) Import(fileName string) error {
+	// ファイルサイズが 4GB を超える場合はエラーを返す。
+	fileInfo, err := os.Stat(fileName)
+	if err != nil { return err }
+	if fileInfo.Size() > SimpleArchiveMaxSize { return ImportArchiveTooLarge }
+	
+	// ファイルの読み込み
 	content, err := os.ReadFile(fileName)
 	if err != nil { return err }
+	
+	// ヘッダー検証
 	if len(content) < 9 { return ImportArchiveTooShort }
 	if content[0] != byte('B') || content[1] != byte('K') || content[2] != byte('S') { return ImportArchiveNotValid }
 	if binary.BigEndian.Uint16(content[3:5]) != 1 { return ImportArchiveUnsupportedVersion }
 	
+	// 名前情報の取得
 	archived_name_len := binary.BigEndian.Uint32(content[5:9])
 	name_end := 9 + uint32(archived_name_len)
 	d.Name = ArchiveEntry{
@@ -39,6 +51,7 @@ func (d *ArchiveData) Import(fileName string) error {
 		Hash: content[name_end:name_end+4],
 	}
 	
+	// データ情報の取得
 	data_start := uint64(name_end) + 4
 	for data_start < uint64(len(content)) {
 		data_len := binary.BigEndian.Uint64(content[data_start:data_start+8])

@@ -12,6 +12,7 @@ func loadDirectoryEntries(directoryEntryFile string, password string) ([]data.Di
 	var entryFile data.ArchiveData
 	if _, err := os.Stat(directoryEntryFile); err == nil {
 		err = entryFile.Import(directoryEntryFile)
+		if err == data.ImportArchiveTooLarge { return []data.DirectoryEntry{}, nil }
 		if err == data.ImportArchiveTooShort { return []data.DirectoryEntry{}, nil }
 		if err == data.ImportArchiveNotValid { return []data.DirectoryEntry{}, nil }
 		if err == data.ImportArchiveUnsupportedVersion { return []data.DirectoryEntry{}, nil }
