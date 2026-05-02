@@ -7,7 +7,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-	
+
 	"bakashier/utils"
 )
 
@@ -63,22 +63,33 @@ func ExportStreamArchive(srcFile string, destFile string, fileName string, passw
 		chunkCRC := utils.CRC32HashBytes(chunk)
 		
 		// 圧縮 → 暗号化
-		chunkCompressed, err := utils.CompressBytes(chunk)
+		chunk, err = utils.CompressBytes(chunk)
 		if err != nil { return err }
-		chunkEncrypted, err := utils.EncryptBytesWithPassword(chunkCompressed, password)
+		chunk, err = utils.EncryptBytesWithPassword(chunk, password)
 		if err != nil { return err }
 		
 		// チャンク長を書き込む
 		chunkLenBin := make([]byte, 8)
-		binary.BigEndian.PutUint64(chunkLenBin, uint64(len(chunkEncrypted)))
+		binary.BigEndian.PutUint64(chunkLenBin, uint64(len(chunk)))
 		
 		// チャンクを書き込む
 		dest.Write(chunkLenBin)
-		dest.Write(chunkEncrypted)
+		dest.Write(chunk)
 		dest.Write(chunkCRC)
 	}
 	
 	return nil
+}
+
+func decryptAndDecompressForImport(bytes []byte, password string) ([]byte, error) {
+	var err error = nil
+	
+	bytes, err = utils.DecryptBytesWithPassword(bytes, password)
+	if err != nil { return []byte{}, err }
+	bytes, err = utils.DecompressBytes(bytes)
+	if err != nil { return []byte{}, err }
+	
+	return bytes, nil
 }
 
 func ImportStreamArchive(archiveFile string, destDirectory string, password string) (error, string) {
@@ -104,11 +115,9 @@ func ImportStreamArchive(archiveFile string, destDirectory string, password stri
 	nameHash := make([]byte, 4)
 	_, err = archive.Read(nameBytes)
 	if err != nil { return err, "" }
-	decryptedName, err := utils.DecryptBytesWithPassword(nameBytes, password)
+	nameBytes, err = decryptAndDecompressForImport(nameBytes, password)
 	if err != nil { return err, "" }
-	decompressedName, err := utils.DecompressBytes(decryptedName)
-	if err != nil { return err, "" }
-	name := string(decompressedName)
+	name := string(nameBytes)
 	_, err = archive.Read(nameHash)
 	if err != nil { return err, "" }
 	if !bytes.Equal(nameHash, utils.CRC32HashBytes(nameBytes)) {
@@ -141,16 +150,13 @@ func ImportStreamArchive(archiveFile string, destDirectory string, password stri
 		if err != nil { return err, "" }
 		
 		// チャンクを復号・展開
-		chunkDecrypted, err := utils.DecryptBytesWithPassword(chunk, password)
-		if err != nil { return err, "" }
-		chunkDecompressed, err := utils.DecompressBytes(chunkDecrypted)
-		if err != nil { return err, "" }
+		chunk, err = decryptAndDecompressForImport(chunk, password)
 		
 		// チャンクを書き出す
-		dest.Write(chunkDecompressed)
+		dest.Write(chunk)
 		
 		// CRC32 ハッシュを検証
-		if !bytes.Equal(chunkCRC, utils.CRC32HashBytes(chunkDecompressed)) {
+		if !bytes.Equal(chunkCRC, utils.CRC32HashBytes(chunk)) {
 			return errors.New("chunk CRC32 hash mismatch"), ""
 		}
 	}
