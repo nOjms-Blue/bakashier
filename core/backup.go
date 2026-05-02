@@ -436,12 +436,7 @@ func backupWorker(workerId uint, password string, toManagerQueue chan<- messageF
 					errHandler("Failed to export directory entries", err)
 					return
 				}
-				archive, err := data.ToArchiveData(queue.SrcDir, content, password)
-				if err != nil {
-					errHandler("Failed to create export directory entries archive data", err)
-					return
-				}
-				err = archive.Export(directoryEntryFile)
+				err = data.ExportAll(directoryEntryFile, queue.SrcDir, content, password, chunkSize)
 				if err != nil {
 					errHandler("Failed to export directory entries archive", err)
 					return
