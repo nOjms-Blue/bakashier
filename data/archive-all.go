@@ -31,6 +31,7 @@ func ImportAll(fileName string, password string) (string, []byte, error) {
 	err = ImportBks(
 		func(length uint64) ([]byte, error) {
 			if offset >= uint64(len(content)) { return []byte{}, nil }
+			if offset + length > uint64(len(content)) { length = uint64(len(content)) - offset }
 			b := content[offset:offset+length]
 			offset = offset + length
 			return b, nil
@@ -61,6 +62,7 @@ func ExportAll(exportFileName string, fileName string, content []byte, password 
 		fileName,
 		func(length uint64) ([]byte, error) {
 			if offset >= uint64(len(content)) { return []byte{}, nil }
+			if offset + length > uint64(len(content)) { length = uint64(len(content)) - offset }
 			b := content[offset:offset+length]
 			offset = offset + length
 			return b, nil

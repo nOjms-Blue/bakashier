@@ -4,14 +4,17 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-
-	"bakashier/utils"
 )
 
 
 var ChunkSize uint64 = 16 * 1024 * 1024 // 16MB
 
 func ExportStreamArchive(srcFile string, dstFile string, fileName string, password string, chunkSize uint64) error {
+	// ソースファイルのサイズを取得
+	fileInfo, err := os.Stat(srcFile)
+	if err != nil { return err }
+	remainFileSize := uint64(fileInfo.Size())
+	
 	// ソースファイルを開く
 	src, err := os.Open(srcFile)
 	if err != nil { return err }
@@ -25,6 +28,10 @@ func ExportStreamArchive(srcFile string, dstFile string, fileName string, passwo
 	ExportBks(
 		fileName,
 		func(length uint64) ([]byte, error) {
+			if remainFileSize == 0 { return []byte{}, nil }
+			if remainFileSize < length { length = remainFileSize }
+			remainFileSize = remainFileSize - length
+			
 			chunk := make([]byte, length)
 			n, err := src.Read(chunk)
 			if err == io.EOF || n == 0 { return []byte{}, nil }
@@ -40,17 +47,6 @@ func ExportStreamArchive(srcFile string, dstFile string, fileName string, passwo
 	)
 	
 	return nil
-}
-
-func decryptAndDecompressForImport(bytes []byte, password string) ([]byte, error) {
-	var err error = nil
-	
-	bytes, err = utils.DecryptBytesWithPassword(bytes, password)
-	if err != nil { return []byte{}, err }
-	bytes, err = utils.DecompressBytes(bytes)
-	if err != nil { return []byte{}, err }
-	
-	return bytes, nil
 }
 
 func ImportStreamArchive(archiveFile string, dstDirectory string, password string) (error, string) {
