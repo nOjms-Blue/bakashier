@@ -56,6 +56,9 @@ func (d *ArchiveData) Import(fileName string) error {
 	for data_start < uint64(len(content)) {
 		data_len := binary.BigEndian.Uint64(content[data_start:data_start+8])
 		data_end := data_start + 8 + uint64(data_len)
+		if uint64(len(content)) < uint64(data_end - (data_start + 8)) {
+			return errors.New("data length error")
+		}
 		d.Data = append(d.Data, ArchiveEntry{
 			Data: content[data_start+8:data_end],
 			Hash: content[data_end:data_end+4],
