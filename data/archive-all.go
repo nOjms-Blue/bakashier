@@ -6,12 +6,7 @@ import (
 )
 
 
-const SimpleArchiveMaxSize = 4 * 1024 * 1024 * 1024 // 4GiB
-
-var ImportArchiveTooShort = errors.New("file is too short")
-var ImportArchiveNotValid = errors.New("file is not a valid archived file")
-var ImportArchiveUnsupportedVersion = errors.New("unsupported version number")
-var ImportArchiveTooLarge = errors.New("file is too large")
+const SIMPLE_ARCHIVE_MAX_SIZE = 4 * 1024 * 1024 * 1024 // 4GiB
 
 func ImportAll(fileName string, password string) (string, []byte, error) {
 	var parsedName = ""
@@ -20,7 +15,7 @@ func ImportAll(fileName string, password string) (string, []byte, error) {
 	// ファイルサイズが 4GB を超える場合はエラーを返す。
 	fileInfo, err := os.Stat(fileName)
 	if err != nil { return "", []byte{}, err }
-	if fileInfo.Size() > SimpleArchiveMaxSize { return "", []byte{}, ImportArchiveTooLarge }
+	if fileInfo.Size() > SIMPLE_ARCHIVE_MAX_SIZE { return "", []byte{}, errors.New("file is too large") }
 	
 	// ファイルの読み込み
 	content, err := os.ReadFile(fileName)
