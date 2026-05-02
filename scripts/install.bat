@@ -17,7 +17,8 @@ IF NOT EXIST "%LOCALAPPDATA%\bakashier" (
 )
 COPY /Y ".\bakashier.exe" "%LOCALAPPDATA%\bakashier\bakashier.exe" >nul 2>&1
 COPY /Y ".\LICENSE" "%LOCALAPPDATA%\bakashier\LICENSE" >nul 2>&1
-COPY /Y ".\NOTICE" "%LOCALAPPDATA%\bakashier\NOTICE" >nul 2>&1
+XCOPY ".\third_party_licenses" "%LOCALAPPDATA%\bakashier\third_party_licenses" /E /I /H /Y >nul 2>&1
+COPY /Y ".\THIRD_PARTY_LICENSES.md" "%LOCALAPPDATA%\bakashier\THIRD_PARTY_LICENSES.md" >nul 2>&1
 COPY /Y ".\README.md" "%LOCALAPPDATA%\bakashier\README.md" >nul 2>&1
 COPY /Y ".\README.ja.md" "%LOCALAPPDATA%\bakashier\README.ja.md" >nul 2>&1
 

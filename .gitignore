@@ -15,3 +15,6 @@ go.work.sum
 # backup & restore files
 backup/
 restore/
+
+# packaged files
+dist/

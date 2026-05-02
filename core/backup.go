@@ -7,12 +7,11 @@ import (
 	"strings"
 	"sync"
 	"time"
-	
+
 	"bakashier/data"
 	"bakashier/utils"
 	"bakashier/view"
 )
-
 
 // キューからメッセージを受け取り、ワーカーにジョブを配分する。
 // FIND_DIR でジョブを投入し、全ジョブが FINISH_JOB で完了すると各ワーカーに EXIT を送る。
@@ -228,16 +227,43 @@ func backupWorker(workerId uint, password string, toManagerQueue chan<- messageF
 				nameMap[entry.HideName] = entry.RealName
 			}
 			
+			moved, err := checkMovedDirs(queue.SrcDir, queue.DistDir, entries, files, password)
+			if err != nil {
+				errHandler("Failed to check moved directories", err)
+				return
+			}
+			
 			// バックアップの実行
 			isExistChanges := false
 			for _, file := range files {
 				hideName := utils.GenerateUniqueRandomName(nameMap)
 				entry := data.DirectoryEntry{Type: data.Unknown}
-				for _, registered := range entries {
-					if registered.RealName == file.Name() {
-						hideName = registered.HideName
-						entry = registered
-						break
+				for _, move := range moved {
+					if move.AfterRealName != file.Name() { continue }
+					
+					for index, registered := range entries {
+						if registered.Type != data.Directory { continue }
+						if move.HideName == registered.HideName {
+							entry = registered
+							entry.RealName = move.AfterRealName
+							info, err := file.Info()
+							if err == nil { entry.ModTime = info.ModTime() }
+							entries[index] = entry
+							
+							hideName = move.HideName
+							isExistChanges = true
+							break
+						}
+					}
+					if entry.Type != data.Unknown { break }
+				}
+				if entry.Type == data.Unknown {
+					for _, registered := range entries {
+						if registered.RealName == file.Name() {
+							hideName = registered.HideName
+							entry = registered
+							break
+						}
 					}
 				}
 				nameMap[hideName] = file.Name()
@@ -410,12 +436,7 @@ func backupWorker(workerId uint, password string, toManagerQueue chan<- messageF
 					errHandler("Failed to export directory entries", err)
 					return
 				}
-				archive, err := data.ToArchiveData(queue.SrcDir, content, password)
-				if err != nil {
-					errHandler("Failed to create export directory entries archive data", err)
-					return
-				}
-				err = archive.Export(directoryEntryFile)
+				err = data.ExportAll(directoryEntryFile, queue.SrcDir, content, password, chunkSize)
 				if err != nil {
 					errHandler("Failed to export directory entries archive", err)
 					return
