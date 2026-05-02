@@ -2,7 +2,6 @@ package core
 
 import (
 	"bakashier/data"
-	"fmt"
 	"os"
 	"path/filepath"
 )
@@ -20,14 +19,6 @@ func checkMovedDirs(srcDir string, distDir string, entries []data.DirectoryEntry
 	remainFiles := make([]os.DirEntry, len(files))
 	possibleRemainFiles := []os.DirEntry{}
 	copy(remainFiles, files)
-	
-	logger := func(text string) {
-		fp, err := os.OpenFile("temporary.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
-		if err == nil {
-			fp.WriteString(text)
-			fp.Close()
-		}
-	}
 	
 	// ディレクトリ以外のエントリを除外
 	onlyDirEntries := []data.DirectoryEntry{}
@@ -74,7 +65,6 @@ func checkMovedDirs(srcDir string, distDir string, entries []data.DirectoryEntry
 		possibles, err := os.ReadDir(path)
 		if err != nil { continue }
 		
-		logger(fmt.Sprintf("%s\n", name))
 		possiblesInDirs[name] = possibles
 	}
 	
@@ -85,7 +75,6 @@ func checkMovedDirs(srcDir string, distDir string, entries []data.DirectoryEntry
 		possibles, err := loadDirectoryEntries(path, password)
 		if err != nil { continue }
 		
-		logger(fmt.Sprintf("%s ? %s\n", entry.HideName, entry.RealName))
 		possiblesInEntries[entry.HideName] = possibles
 	}
 	
@@ -138,12 +127,6 @@ func checkMovedDirs(srcDir string, distDir string, entries []data.DirectoryEntry
 					BeforeRealName: entry.RealName,
 					AfterRealName: file.Name(),
 				})
-				
-				fp, err := os.OpenFile("temporary.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
-				if err == nil {
-					fp.WriteString(fmt.Sprintf("%f%c : %s ? %s ? %s\n", decidePercent * 100, '%', entry.HideName, entry.RealName, file.Name()))
-					fp.Close()
-				}
 			}
 		}
 	}
