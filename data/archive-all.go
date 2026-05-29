@@ -73,3 +73,7 @@ func ExportAll(exportFileName string, fileName string, content []byte, password 
 	
 	return nil
 }
+
+func ExportAllV2(exportFileName string, content []byte, password string, chunkSize uint64) error {
+	return ExportAll(exportFileName, "", content, password, chunkSize)
+}

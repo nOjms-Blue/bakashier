@@ -49,13 +49,13 @@ func ExportStreamArchive(srcFile string, dstFile string, fileName string, passwo
 	return nil
 }
 
-func ImportStreamArchive(archiveFile string, dstDirectory string, password string) (error, string) {
+func ImportStreamArchive(archiveFile string, dstDirectory string, password string) (string, error) {
 	var dstFile string = ""
 	var dst *os.File = nil
 	
 	// アーカイブファイルを開く
 	archive, err := os.Open(archiveFile)
-	if err != nil { return err, "" }
+	if err != nil { return "", err }
 	defer archive.Close()
 	
 	err = ImportBks(
@@ -80,5 +80,35 @@ func ImportStreamArchive(archiveFile string, dstDirectory string, password strin
 	)
 	if dst != nil { dst.Close() }
 	
-	return nil, dstFile
+	return dstFile, nil
+}
+
+func ImportStreamArchiveV2(archiveFile string, dstFile string, password string) error {
+	// アーカイブファイルを開く
+	archive, err := os.Open(archiveFile)
+	if err != nil { return err }
+	defer archive.Close()
+	
+	// 出力先ファイルを開く
+	dst, err := os.Create(dstFile)
+	if err != nil { return err }
+	defer dst.Close()
+	
+	err = ImportBks(
+		func(length uint64) ([]byte, error) {
+			chunk := make([]byte, length)
+			n, err := archive.Read(chunk)
+			if err == io.EOF || n == 0 { return []byte{}, nil }
+			if err != nil { return []byte{}, err }
+			return chunk, nil
+		},
+		func(name string, data []byte) error {
+			var err error = nil
+			_, err = dst.Write(data)
+			return err
+		},
+		password,
+	)
+	
+	return nil
 }

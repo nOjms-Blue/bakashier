@@ -28,15 +28,21 @@ func ExportBks(name string, reader func(length uint64) ([]byte, error), writer f
 	// ヘッダを書き込む
 	var versionBytes = make([]byte, 2)
 	var nameLenBytes = make([]byte, 4)
-	binary.BigEndian.PutUint16(versionBytes, 1)
-	nameBytes, nameCRC, err := exportProcess([]byte(name))
-	if err != nil { return err }
-	binary.BigEndian.PutUint32(nameLenBytes, uint32(len(nameBytes)))
 	writer([]byte("BKS"))
-	writer(versionBytes)
-	writer(nameLenBytes)
-	writer(nameBytes)
-	writer(nameCRC)
+	if name != "" {
+		binary.BigEndian.PutUint16(versionBytes, 1)
+		writer(versionBytes)
+		
+		nameBytes, nameCRC, err := exportProcess([]byte(name))
+		if err != nil { return err }
+		binary.BigEndian.PutUint32(nameLenBytes, uint32(len(nameBytes)))
+		writer(nameLenBytes)
+		writer(nameBytes)
+		writer(nameCRC)
+	} else {
+		binary.BigEndian.PutUint16(versionBytes, 2)
+		writer(versionBytes)
+	}
 	
 	chunkLenBytes := make([]byte, 8)
 	for {
@@ -85,20 +91,24 @@ func ImportBks(reader func(length uint64) ([]byte, error), writer func(name stri
 	if header[0] != byte('B') || header[1] != byte('K') || header[2] != byte('S') {
 		return errors.New("file is not a valid archived file")
 	}
-	if binary.BigEndian.Uint16(header[3:5]) != 1 {
+	version := binary.BigEndian.Uint16(header[3:5])
+	if version != 1 && version != 2 {
 		return errors.New("unsupported version number")
 	}
 	
-	// 名前情報の取得
-	nameLen := binary.BigEndian.Uint32(header[5:9])
-	nameBytes, err := reader(uint64(nameLen))
-	if err != nil { return err }
-	nameHash, err := reader(4)
-	if err != nil { return err }
-	nameBytes, err = importProcess(nameBytes, nameHash)
-	if err != nil { return err }
-	name := string(nameBytes)
-
+	// 名前情報の取得 (v1)
+	name := ""
+	if version == 1 {
+		nameLen := binary.BigEndian.Uint32(header[5:9])
+		nameBytes, err := reader(uint64(nameLen))
+		if err != nil { return err }
+		nameHash, err := reader(4)
+		if err != nil { return err }
+		nameBytes, err = importProcess(nameBytes, nameHash)
+		if err != nil { return err }
+		name = string(nameBytes)
+	}
+	
 	chunkLenBytes := []byte{}
 	chunk := []byte{}
 	chunkCRC := []byte{}
