@@ -1,0 +1,18 @@
+{
+	"ignorePaths": [
+		"go.mod"
+	],
+	"ignoreWords": [
+		"bubbletea",
+		"cdpath",
+		"charmbracelet",
+		"ciphertext",
+		"errorlevel",
+		"lipgloss",
+		"localappdata",
+		"textinput"
+	],
+	"words": [
+		"bakashier"
+	]
+}
