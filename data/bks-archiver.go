@@ -5,7 +5,13 @@ import (
 	"bytes"
 	"encoding/binary"
 	"errors"
+	"os"
 )
+
+
+var ERR_NOT_ARCHIVE_FILE = errors.New("file is not a valid archived file")
+var ERR_UNSUPPORTED_VER = errors.New("unsupported version number")
+var ERR_HASH_MISMATCH = errors.New("chunk CRC32 hash mismatch")
 
 
 func ExportBks(name string, reader func(length uint64) ([]byte, error), writer func(data []byte) error, password string, chunkSize uint64) error {
@@ -78,7 +84,7 @@ func ImportBks(reader func(length uint64) ([]byte, error), writer func(name stri
 		
 		// CRC32 ハッシュを検証
 		if !bytes.Equal(hash, utils.CRC32HashBytes(chunk)) {
-			return []byte{}, errors.New("chunk CRC32 hash mismatch")
+			return []byte{}, ERR_HASH_MISMATCH
 		}
 		return chunk, nil
 	}
@@ -89,11 +95,11 @@ func ImportBks(reader func(length uint64) ([]byte, error), writer func(name stri
 	
 	// ヘッダの先頭部分の検証
 	if header[0] != byte('B') || header[1] != byte('K') || header[2] != byte('S') {
-		return errors.New("file is not a valid archived file")
+		return ERR_NOT_ARCHIVE_FILE
 	}
 	version := binary.BigEndian.Uint16(header[3:5])
 	if version != 1 && version != 2 {
-		return errors.New("unsupported version number")
+		return ERR_UNSUPPORTED_VER
 	}
 	
 	// 名前情報の取得 (v1)
