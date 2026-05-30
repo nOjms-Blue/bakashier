@@ -84,7 +84,7 @@ func ImportBks(reader func(length uint64) ([]byte, error), writer func(name stri
 	}
 	
 	// ヘッダの取得
-	header, err := reader(9)
+	header, err := reader(5)
 	if err != nil { return err }
 	
 	// ヘッダの先頭部分の検証
@@ -99,7 +99,9 @@ func ImportBks(reader func(length uint64) ([]byte, error), writer func(name stri
 	// 名前情報の取得 (v1)
 	name := ""
 	if version == 1 {
-		nameLen := binary.BigEndian.Uint32(header[5:9])
+		nameLenBytes, err := reader(4)
+		if err != nil { return err }
+		nameLen := binary.BigEndian.Uint32(nameLenBytes)
 		nameBytes, err := reader(uint64(nameLen))
 		if err != nil { return err }
 		nameHash, err := reader(4)
