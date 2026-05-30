@@ -16,6 +16,9 @@ func CRC32HashBytes(data []byte) []byte {
 	return buf
 }
 
+// SHA256 ハッシュ値のバイト数
+const SHA256_BYTES = 32
+
 // ファイルのSHA256のハッシュ値を求める
 func CalcSHA256FromFile(file string) ([]byte, error) {
 	fp, err := os.Open(file)

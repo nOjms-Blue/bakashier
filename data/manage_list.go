@@ -1,6 +1,7 @@
 package data
 
 import (
+	"bakashier/utils"
 	"bytes"
 	"encoding/binary"
 	"errors"
@@ -23,10 +24,10 @@ func (m *ManageList) Load(file string, password string) error {
 	if err != nil { return err }
 	
 	for {
-		if len(content) < 32 { break }
-		hash := content[:32]
+		if len(content) < utils.SHA256_BYTES { break }
+		hash := content[:utils.SHA256_BYTES]
 		
-		content = content[32:]
+		content = content[utils.SHA256_BYTES:]
 		
 		if len(content) < 4 { break }
 		length := binary.BigEndian.Uint32(content[:4])
@@ -57,7 +58,7 @@ func (m ManageList) Save(password string, chunkSize uint64) error {
 	var buf bytes.Buffer
 	
 	for _, row := range m.list {
-		if len(row.Hash) != 32 {
+		if len(row.Hash) != utils.SHA256_BYTES {
 			return errors.New("manage list row format error: row.Hash is not SHA256 hash bytes")
 		}
 		_, err := buf.Write(row.Hash)
