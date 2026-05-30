@@ -143,3 +143,24 @@ func ImportBks(reader func(length uint64) ([]byte, error), writer func(name stri
 	
 	return nil
 }
+
+func CheckVerBks(file string) (uint16, error) {
+	// アーカイブファイルを開く
+	fp, err := os.Open(file)
+	if err != nil { return 0, err }
+	defer fp.Close()
+	
+	bks := make([]byte, 3)
+	_, err = fp.Read(bks)
+	if err != nil { return 0, err }
+	if bks[0] != byte('B') || bks[1] != byte('K') || bks[2] != byte('S') {
+		return 0, ERR_NOT_ARCHIVE_FILE
+	}
+	
+	verBytes := make([]byte, 2)
+	version := binary.BigEndian.Uint16(verBytes)
+	if version != 1 && version != 2 {
+		return 0, ERR_UNSUPPORTED_VER
+	}
+	return version, nil
+}
