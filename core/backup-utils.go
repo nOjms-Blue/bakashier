@@ -80,13 +80,14 @@ func checkMovedDirs(srcDir string, distDir string, entries []data.DirectoryEntry
 	
 	// ディレクトリ内にあるファイル名の一致率を計算
 	calcSamePercent := func(entries []data.DirectoryEntry, files []os.DirEntry) float64 {
-		remainFiles = make([]os.DirEntry, len(files))
-		copy(remainFiles, files)
+		// 外側の remainFiles を書き換えないよう、ローカルのコピーに対して処理する
+		candidateFiles := make([]os.DirEntry, len(files))
+		copy(candidateFiles, files)
 		
 		count := 0
 		for _, entry := range entries {
 			sameNameIndex := -1
-			for index, file := range remainFiles {
+			for index, file := range candidateFiles {
 				if entry.RealName == file.Name() {
 					sameNameIndex = index
 					count = count + 2
@@ -95,7 +96,7 @@ func checkMovedDirs(srcDir string, distDir string, entries []data.DirectoryEntry
 			}
 			
 			if sameNameIndex < 0 { continue }
-			remainFiles = append(remainFiles[:sameNameIndex], remainFiles[sameNameIndex+1:]...)
+			candidateFiles = append(candidateFiles[:sameNameIndex], candidateFiles[sameNameIndex+1:]...)
 		}
 		
 		if count <= 0 { return 0 }
