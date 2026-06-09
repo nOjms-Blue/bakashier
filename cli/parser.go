@@ -104,6 +104,9 @@ func ParseArgs(args []string) (ParsedArgs, error) {
 			if err != nil || parsed == 0 {
 				return ParsedArgs{}, fmt.Errorf("chunk size must be a positive integer (MiB)")
 			}
+			if parsed > data.MAX_CHUNK_SIZE/(1024*1024) {
+				return ParsedArgs{}, fmt.Errorf("chunk size must be at most %d MiB", data.MAX_CHUNK_SIZE/(1024*1024))
+			}
 			chunkSizeMiB = parsed
 			i++
 		case "--limit-size", "-ls":
