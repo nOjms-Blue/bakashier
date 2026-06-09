@@ -64,6 +64,10 @@ func backupManager(workers uint32, fromWorkerQueue <-chan messageFromWorkerToMan
 				}
 			}
 		default:
+			// 受信メッセージも配分待ちジョブもない場合は、ビジーウェイトを避けるため待機する
+			if len(untreatedMessage) == 0 {
+				time.Sleep(10 * time.Millisecond)
+			}
 		}
 		
 		// 一時停止中の場合は、ワーカーに送ったメッセージをすべて未処理に移動
