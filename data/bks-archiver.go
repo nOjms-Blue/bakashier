@@ -5,10 +5,24 @@ import (
 	"bytes"
 	"encoding/binary"
 	"errors"
+	"fmt"
 )
 
 
+// エクスポート時に指定できるプレーンテキストチャンクの上限サイズ。
+const MAX_CHUNK_SIZE uint64 = 8 * 1024 * 1024 * 1024 // 8GiB
+
+// インポート時に許容する圧縮・暗号化済みチャンクの上限サイズ（zlib・AES-GCM のオーバーヘッドを考慮）。
+const maxEncryptedChunkSize uint64 = MAX_CHUNK_SIZE + MAX_CHUNK_SIZE/128 + 1024
+
+// インポート時に許容する圧縮・暗号化済み名前ブロックの上限サイズ。
+const maxEncryptedNameSize uint64 = 64 * 1024
+
 func ExportBks(name string, reader func(length uint64) ([]byte, error), writer func(data []byte) error, password string, chunkSize uint64) error {
+	if chunkSize == 0 || chunkSize > MAX_CHUNK_SIZE {
+		return fmt.Errorf("invalid chunk size: %d (must be 1..%d)", chunkSize, MAX_CHUNK_SIZE)
+	}
+	
 	// 出力の圧縮・暗号化処理
 	exportProcess := func(chunk []byte) ([]byte, []byte, error) {
 		var err error = nil
@@ -32,11 +46,11 @@ func ExportBks(name string, reader func(length uint64) ([]byte, error), writer f
 	nameBytes, nameCRC, err := exportProcess([]byte(name))
 	if err != nil { return err }
 	binary.BigEndian.PutUint32(nameLenBytes, uint32(len(nameBytes)))
-	writer([]byte("BKS"))
-	writer(versionBytes)
-	writer(nameLenBytes)
-	writer(nameBytes)
-	writer(nameCRC)
+	if err := writer([]byte("BKS")); err != nil { return err }
+	if err := writer(versionBytes); err != nil { return err }
+	if err := writer(nameLenBytes); err != nil { return err }
+	if err := writer(nameBytes); err != nil { return err }
+	if err := writer(nameCRC); err != nil { return err }
 	
 	chunkLenBytes := make([]byte, 8)
 	for {
@@ -53,9 +67,9 @@ func ExportBks(name string, reader func(length uint64) ([]byte, error), writer f
 		// チャンク長を書き込む
 		binary.BigEndian.PutUint64(chunkLenBytes, uint64(len(chunk)))
 		
-		writer(chunkLenBytes)
-		writer(chunk)
-		writer(chunkCRC)
+		if err := writer(chunkLenBytes); err != nil { return err }
+		if err := writer(chunk); err != nil { return err }
+		if err := writer(chunkCRC); err != nil { return err }
 	}
 	
 	return nil
@@ -80,6 +94,9 @@ func ImportBks(reader func(length uint64) ([]byte, error), writer func(name stri
 	// ヘッダの取得
 	header, err := reader(9)
 	if err != nil { return err }
+	if len(header) < 9 {
+		return errors.New("file is not a valid archived file (header too short)")
+	}
 	
 	// ヘッダの先頭部分の検証
 	if header[0] != byte('B') || header[1] != byte('K') || header[2] != byte('S') {
@@ -91,36 +108,61 @@ func ImportBks(reader func(length uint64) ([]byte, error), writer func(name stri
 	
 	// 名前情報の取得
 	nameLen := binary.BigEndian.Uint32(header[5:9])
+	if uint64(nameLen) > maxEncryptedNameSize {
+		return fmt.Errorf("invalid archive: name block too large (%d bytes)", nameLen)
+	}
 	nameBytes, err := reader(uint64(nameLen))
 	if err != nil { return err }
+	if uint64(len(nameBytes)) < uint64(nameLen) {
+		return errors.New("invalid archive: truncated name block")
+	}
 	nameHash, err := reader(4)
 	if err != nil { return err }
+	if len(nameHash) < 4 {
+		return errors.New("invalid archive: truncated name hash")
+	}
 	nameBytes, err = importProcess(nameBytes, nameHash)
 	if err != nil { return err }
 	name := string(nameBytes)
 
-	chunkLenBytes := []byte{}
-	chunk := []byte{}
-	chunkCRC := []byte{}
+	wroteChunk := false
 	for {
-		chunkLenBytes, err = reader(8)
+		chunkLenBytes, err := reader(8)
 		if err != nil { return err }
 		if len(chunkLenBytes) == 0 { break }
+		if len(chunkLenBytes) < 8 {
+			return errors.New("invalid archive: truncated chunk length")
+		}
 		chunkLen := binary.BigEndian.Uint64(chunkLenBytes)
+		if chunkLen > maxEncryptedChunkSize {
+			return fmt.Errorf("invalid archive: chunk too large (%d bytes)", chunkLen)
+		}
 		
 		// チャンクを読み込む
-		chunk, err = reader(chunkLen)
+		chunk, err := reader(chunkLen)
 		if err != nil { return err }
+		if uint64(len(chunk)) < chunkLen {
+			return errors.New("invalid archive: truncated chunk")
+		}
 		
 		// CRC32 ハッシュを読み込む
-		chunkCRC, err = reader(4)
+		chunkCRC, err := reader(4)
 		if err != nil { return err }
+		if len(chunkCRC) < 4 {
+			return errors.New("invalid archive: truncated chunk hash")
+		}
 		
 		// チャンクを復号・展開
 		chunk, err = importProcess(chunk, chunkCRC)
 		if err != nil { return err }
 		
-		writer(name, chunk)
+		if err := writer(name, chunk); err != nil { return err }
+		wroteChunk = true
+	}
+	
+	// チャンクが1つもない場合（空ファイル）でも writer を呼び、出力先の作成を保証する
+	if !wroteChunk {
+		if err := writer(name, []byte{}); err != nil { return err }
 	}
 	
 	return nil

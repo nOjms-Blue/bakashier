@@ -63,6 +63,10 @@ func restoreManager(workers uint32, fromWorkerQueue <-chan messageFromWorkerToMa
 				}
 			}
 		default:
+			// 受信メッセージも配分待ちジョブもない場合は、ビジーウェイトを避けるため待機する
+			if len(untreatedMessage) == 0 {
+				time.Sleep(10 * time.Millisecond)
+			}
 		}
 		
 		// 一時停止中の場合は、ワーカーに送ったメッセージをすべて未処理に移動
@@ -199,6 +203,12 @@ func restoreWorker(workerId uint, password string, toManagerQueue chan<- message
 			
 			// リストアを実行
 			for _, entry := range entries {
+				// パストラバーサル対策: エントリ名がディレクトリ要素を含む場合はスキップする
+				if !data.IsSafeFileName(entry.RealName) || !data.IsSafeFileName(entry.HideName) {
+					errHandler("Unsafe entry name", fmt.Errorf("real=%q hide=%q", entry.RealName, entry.HideName))
+					continue
+				}
+				
 				switch entry.Type {
 				case data.Directory:
 					hiddenDir := filepath.Join(queue.SrcDir, entry.HideName)
@@ -231,7 +241,7 @@ func restoreWorker(workerId uint, password string, toManagerQueue chan<- message
 					}
 					
 					func() {
-						err, realFile := data.ImportStreamArchive(archiveFile, queue.DistDir, password)
+						realFile, err := data.ImportStreamArchive(archiveFile, queue.DistDir, password)
 						if err != nil {
 							errHandler("Failed to import stream archive", err)
 							return
