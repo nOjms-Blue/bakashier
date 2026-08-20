@@ -8,7 +8,7 @@ import (
 	"sync"
 	"time"
 
-	"bakashier/data"
+	"bakashier/archive"
 	"bakashier/utils"
 	"bakashier/view"
 )
@@ -208,8 +208,8 @@ func backupWorker(workerId uint, password string, toManagerQueue chan<- messageF
 				return
 			}
 
-			nameMap := make(map[string]string)                 // [HideName]RealName
-			newEntries := make(map[string]data.DirectoryEntry) // [HideName]DirectoryEntry
+			nameMap := make(map[string]string)                    // [HideName]RealName
+			newEntries := make(map[string]archive.DirectoryEntry) // [HideName]DirectoryEntry
 			directoryEntryFile := filepath.Join(queue.DistDir, "_directory_.bks")
 
 			// 既存の _directory_.bks が存在しない場合は、中断されたバックアップを削除する。
@@ -247,14 +247,14 @@ func backupWorker(workerId uint, password string, toManagerQueue chan<- messageF
 			isExistChanges := false
 			for _, file := range files {
 				hideName := utils.GenerateUniqueRandomName(nameMap)
-				entry := data.DirectoryEntry{Type: data.Unknown}
+				entry := archive.DirectoryEntry{Type: archive.Unknown}
 				for _, move := range moved {
 					if move.AfterRealName != file.Name() {
 						continue
 					}
 
 					for index, registered := range entries {
-						if registered.Type != data.Directory {
+						if registered.Type != archive.Directory {
 							continue
 						}
 						if move.HideName == registered.HideName {
@@ -271,11 +271,11 @@ func backupWorker(workerId uint, password string, toManagerQueue chan<- messageF
 							break
 						}
 					}
-					if entry.Type != data.Unknown {
+					if entry.Type != archive.Unknown {
 						break
 					}
 				}
-				if entry.Type == data.Unknown {
+				if entry.Type == archive.Unknown {
 					for _, registered := range entries {
 						if registered.RealName == file.Name() {
 							hideName = registered.HideName
@@ -288,8 +288,8 @@ func backupWorker(workerId uint, password string, toManagerQueue chan<- messageF
 
 				if file.IsDir() {
 					// ディレクトリエントリを追加
-					newEntries[hideName] = data.DirectoryEntry{
-						Type:     data.Directory,
+					newEntries[hideName] = archive.DirectoryEntry{
+						Type:     archive.Directory,
 						RealName: file.Name(),
 						HideName: hideName,
 						Size:     uint64(0),
@@ -297,7 +297,7 @@ func backupWorker(workerId uint, password string, toManagerQueue chan<- messageF
 					}
 
 					// 既存のエントリと異なる場合は変更があると判定 または バックアップ先にディレクトリが存在しない場合は変更があると判定
-					if entry.Type != data.Directory || entry.RealName != file.Name() {
+					if entry.Type != archive.Directory || entry.RealName != file.Name() {
 						isExistChanges = true
 					} else if _, err := os.Stat(filepath.Join(queue.DistDir, hideName)); err != nil {
 						isExistChanges = true
@@ -331,7 +331,7 @@ func backupWorker(workerId uint, password string, toManagerQueue chan<- messageF
 						}
 
 						// 変更がないか
-						if entry.Type == data.File {
+						if entry.Type == archive.File {
 							if entry.Size == uint64(fileInfo.Size()) && entry.ModTime.Equal(fileInfo.ModTime()) {
 								isNotChangeFile = true
 							}
@@ -354,15 +354,15 @@ func backupWorker(workerId uint, password string, toManagerQueue chan<- messageF
 						// ファイルをバックアップ
 						srcFile := filepath.Join(queue.SrcDir, file.Name())
 						archiveFile := filepath.Join(queue.DistDir, fmt.Sprintf("%s.bks", hideName))
-						err = data.ExportStreamArchive(srcFile, archiveFile, file.Name(), password, chunkSize)
+						err = exportArchiveFile(srcFile, archiveFile, file.Name(), password, chunkSize)
 						if err != nil {
 							errHandler("Failed to export stream archive", err)
 							return
 						}
 
 						// ファイルエントリを追加
-						newEntries[hideName] = data.DirectoryEntry{
-							Type:     data.File,
+						newEntries[hideName] = archive.DirectoryEntry{
+							Type:     archive.File,
 							RealName: file.Name(),
 							HideName: hideName,
 							Size:     uint64(fileInfo.Size()),
@@ -395,7 +395,7 @@ func backupWorker(workerId uint, password string, toManagerQueue chan<- messageF
 				for _, entry := range entries {
 					if _, ok := newEntries[entry.HideName]; !ok {
 						isExistChanges = true
-						if entry.Type == data.File {
+						if entry.Type == archive.File {
 							os.Remove(filepath.Join(queue.DistDir, fmt.Sprintf("%s.bks", entry.HideName)))
 						} else {
 							os.RemoveAll(filepath.Join(queue.DistDir, entry.HideName))
@@ -421,7 +421,7 @@ func backupWorker(workerId uint, password string, toManagerQueue chan<- messageF
 				}
 
 				for _, entry := range newEntries {
-					if entry.Type == data.File {
+					if entry.Type == archive.File {
 						if fmt.Sprintf("%s.bks", entry.HideName) == dstFile.Name() {
 							isExist = true
 							break
@@ -445,16 +445,11 @@ func backupWorker(workerId uint, password string, toManagerQueue chan<- messageF
 
 			// ディレクトリエントリを保存
 			if isExistChanges {
-				entries = make([]data.DirectoryEntry, 0, len(newEntries))
+				entries = make([]archive.DirectoryEntry, 0, len(newEntries))
 				for _, entry := range newEntries {
 					entries = append(entries, entry)
 				}
-				content, err := data.ExportDirectoryEntries(entries)
-				if err != nil {
-					errHandler("Failed to export directory entries", err)
-					return
-				}
-				err = data.ExportAll(directoryEntryFile, queue.SrcDir, content, password, chunkSize)
+				err = saveDirectoryEntries(directoryEntryFile, queue.SrcDir, entries, password, chunkSize)
 				if err != nil {
 					errHandler("Failed to export directory entries archive", err)
 					return

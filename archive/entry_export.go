@@ -19,6 +19,13 @@ func ExportDirectoryEntries(reader func(*DirectoryEntry) error, writer io.Writer
 			return err
 		}
 
+		if len(entry.RealName) > MAX_NAME_SIZE {
+			return errors.New("real name length is out of range")
+		}
+		if len(entry.HideName) > MAX_NAME_SIZE {
+			return errors.New("hide name length is out of range")
+		}
+
 		// エントリタイプを書き込み
 		_, err = writer.Write([]byte{byte(entry.Type)})
 		if err != nil {
@@ -26,9 +33,6 @@ func ExportDirectoryEntries(reader func(*DirectoryEntry) error, writer io.Writer
 		}
 
 		// RealName のバイト長を書き込み
-		if len(entry.RealName) > int(MAX_CHUNK_SIZE) {
-			return errors.New("real name length is out of range")
-		}
 		realNameBytesLengthBytes := [4]byte{0, 0, 0, 0}
 		binary.BigEndian.PutUint32(realNameBytesLengthBytes[:], uint32(len(entry.RealName)))
 		_, err = writer.Write(realNameBytesLengthBytes[:])
@@ -37,9 +41,6 @@ func ExportDirectoryEntries(reader func(*DirectoryEntry) error, writer io.Writer
 		}
 
 		// HideName のバイト長を書き込み
-		if len(entry.HideName) > int(MAX_CHUNK_SIZE) {
-			return errors.New("real name length is out of range")
-		}
 		hideNameBytesLengthBytes := [4]byte{0, 0, 0, 0}
 		binary.BigEndian.PutUint32(hideNameBytesLengthBytes[:], uint32(len(entry.HideName)))
 		_, err = writer.Write(hideNameBytesLengthBytes[:])

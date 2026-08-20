@@ -68,11 +68,9 @@ func (bks BksArchive) Import(reader io.Reader, getWriter func(name string) (io.W
 		return err
 	}
 	name := string(originalBytes)
-	if !IsSafeFileName(name) {
-		return errors.New("invalid archive: unsafe name")
-	}
 
-	// writer の取得
+	// writer の取得。名前の安全性（zip-slip）はファイルへ書き出す呼び出し側で検証する。
+	// _directory_.bks はソースパスを名前として格納するため、ここでは拒否しない。
 	writer, err := getWriter(name)
 	if err != nil {
 		return fmt.Errorf("failed to get writer: %w", err)

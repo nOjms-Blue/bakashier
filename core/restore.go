@@ -7,7 +7,7 @@ import (
 	"sync"
 	"time"
 
-	"bakashier/data"
+	"bakashier/archive"
 	"bakashier/view"
 )
 
@@ -211,13 +211,13 @@ func restoreWorker(workerId uint, password string, toManagerQueue chan<- message
 			// リストアを実行
 			for _, entry := range entries {
 				// パストラバーサル対策: エントリ名がディレクトリ要素を含む場合はスキップする
-				if !data.IsSafeFileName(entry.RealName) || !data.IsSafeFileName(entry.HideName) {
+				if !archive.IsSafeFileName(entry.RealName) || !archive.IsSafeFileName(entry.HideName) {
 					errHandler("Unsafe entry name", fmt.Errorf("real=%q hide=%q", entry.RealName, entry.HideName))
 					continue
 				}
 
 				switch entry.Type {
-				case data.Directory:
+				case archive.Directory:
 					hiddenDir := filepath.Join(queue.SrcDir, entry.HideName)
 					realDir := filepath.Join(queue.DistDir, entry.RealName)
 					err = os.MkdirAll(realDir, 0755)
@@ -234,7 +234,7 @@ func restoreWorker(workerId uint, password string, toManagerQueue chan<- message
 						DistDir:  realDir,
 						Detail:   "",
 					}
-				case data.File:
+				case archive.File:
 					archiveFile := filepath.Join(queue.SrcDir, fmt.Sprintf("%s.bks", entry.HideName))
 
 					// ファイル処理開始をビューに通知
@@ -248,7 +248,7 @@ func restoreWorker(workerId uint, password string, toManagerQueue chan<- message
 					}
 
 					func() {
-						realFile, err := data.ImportStreamArchive(archiveFile, queue.DistDir, password)
+						realFile, err := importArchiveFile(archiveFile, queue.DistDir, password)
 						if err != nil {
 							errHandler("Failed to import stream archive", err)
 							return

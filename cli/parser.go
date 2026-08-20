@@ -7,7 +7,7 @@ import (
 	"strconv"
 	"strings"
 
-	"bakashier/data"
+	"bakashier/archive"
 )
 
 // 親ディレクトリが子ディレクトリのサブパスになっているかを判定する。
@@ -103,8 +103,8 @@ func ParseArgs(args []string) (ParsedArgs, error) {
 			if err != nil || parsed == 0 {
 				return ParsedArgs{}, fmt.Errorf("chunk size must be a positive integer (MiB)")
 			}
-			if parsed > data.MAX_CHUNK_SIZE/(1024*1024) {
-				return ParsedArgs{}, fmt.Errorf("chunk size must be at most %d MiB", data.MAX_CHUNK_SIZE/(1024*1024))
+			if parsed > archive.MAX_CHUNK_SIZE/(1024*1024) {
+				return ParsedArgs{}, fmt.Errorf("chunk size must be at most %d MiB", archive.MAX_CHUNK_SIZE/(1024*1024))
 			}
 			chunkSizeMiB = parsed
 			i++
@@ -180,11 +180,11 @@ func ParseArgs(args []string) (ParsedArgs, error) {
 	}
 
 	// チャンクサイズを設定する。
-	chunkSize := data.ChunkSize
+	chunkSize := archive.DEFAULT_CHUNK_SIZE
 	if chunkSizeMiB > 0 {
 		chunkSize = chunkSizeMiB * 1024 * 1024
 	} else {
-		chunkSize = data.ChunkSize
+		chunkSize = archive.DEFAULT_CHUNK_SIZE
 	}
 
 	// 解析結果を返す。

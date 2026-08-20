@@ -1,7 +1,7 @@
 package core
 
 import (
-	"bakashier/data"
+	"bakashier/archive"
 	"os"
 	"path/filepath"
 )
@@ -12,20 +12,20 @@ type MovedDir struct {
 	AfterRealName  string
 }
 
-func checkMovedDirs(srcDir string, distDir string, entries []data.DirectoryEntry, files []os.DirEntry, password string) ([]MovedDir, error) {
-	remainEntries := make([]data.DirectoryEntry, len(entries))
+func checkMovedDirs(srcDir string, distDir string, entries []archive.DirectoryEntry, files []os.DirEntry, password string) ([]MovedDir, error) {
+	remainEntries := make([]archive.DirectoryEntry, len(entries))
 	copy(remainEntries, entries)
 	remainFiles := make([]os.DirEntry, len(files))
 	possibleRemainFiles := []os.DirEntry{}
 	copy(remainFiles, files)
 
 	// ディレクトリ以外のエントリを除外
-	onlyDirEntries := []data.DirectoryEntry{}
+	onlyDirEntries := []archive.DirectoryEntry{}
 	for len(remainEntries) > 0 {
 		entry := remainEntries[0]
 		remainEntries = remainEntries[1:]
 
-		if entry.Type == data.Directory {
+		if entry.Type == archive.Directory {
 			onlyDirEntries = append(onlyDirEntries, entry)
 		}
 	}
@@ -76,7 +76,7 @@ func checkMovedDirs(srcDir string, distDir string, entries []data.DirectoryEntry
 	}
 
 	// 移動した可能性のあるフォルダエントリの情報を取得
-	possiblesInEntries := map[string]([]data.DirectoryEntry){}
+	possiblesInEntries := map[string]([]archive.DirectoryEntry){}
 	for _, entry := range remainEntries {
 		path := filepath.Join(distDir, entry.HideName, "_directory_.bks")
 		possibles, err := loadDirectoryEntries(path, password)
@@ -88,7 +88,7 @@ func checkMovedDirs(srcDir string, distDir string, entries []data.DirectoryEntry
 	}
 
 	// ディレクトリ内にあるファイル名の一致率を計算
-	calcSamePercent := func(entries []data.DirectoryEntry, files []os.DirEntry) float64 {
+	calcSamePercent := func(entries []archive.DirectoryEntry, files []os.DirEntry) float64 {
 		// 外側の remainFiles を書き換えないよう、ローカルのコピーに対して処理する
 		candidateFiles := make([]os.DirEntry, len(files))
 		copy(candidateFiles, files)
@@ -138,7 +138,7 @@ func checkMovedDirs(srcDir string, distDir string, entries []data.DirectoryEntry
 		}
 
 		for _, entry := range entries {
-			if entry.Type != data.Directory {
+			if entry.Type != archive.Directory {
 				continue
 			}
 			if decideKey == entry.HideName {
