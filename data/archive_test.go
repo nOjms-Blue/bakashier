@@ -9,25 +9,24 @@ import (
 	"testing"
 )
 
-
 const testPassword = "test-password"
 
 // ExportStreamArchive と ImportStreamArchive の往復で内容が一致することを確認する。
 func TestStreamArchiveRoundtrip(t *testing.T) {
 	tmp := t.TempDir()
-	
+
 	// 複数チャンクにまたがるデータ（チャンクサイズ 1KiB に対して 10KiB + 端数）
 	content := bytes.Repeat([]byte("0123456789abcdef"), 640+3)
 	srcFile := filepath.Join(tmp, "source.bin")
 	if err := os.WriteFile(srcFile, content, 0644); err != nil {
 		t.Fatal(err)
 	}
-	
+
 	archiveFile := filepath.Join(tmp, "archive.bks")
 	if err := ExportStreamArchive(srcFile, archiveFile, "source.bin", testPassword, 1024); err != nil {
 		t.Fatalf("ExportStreamArchive failed: %v", err)
 	}
-	
+
 	restoreDir := filepath.Join(tmp, "restore")
 	if err := os.MkdirAll(restoreDir, 0755); err != nil {
 		t.Fatal(err)
@@ -39,7 +38,7 @@ func TestStreamArchiveRoundtrip(t *testing.T) {
 	if restored != filepath.Join(restoreDir, "source.bin") {
 		t.Fatalf("unexpected restored path: %s", restored)
 	}
-	
+
 	restoredContent, err := os.ReadFile(restored)
 	if err != nil {
 		t.Fatal(err)
@@ -52,17 +51,17 @@ func TestStreamArchiveRoundtrip(t *testing.T) {
 // 空ファイルがリストアで復元されることを確認する。
 func TestStreamArchiveEmptyFile(t *testing.T) {
 	tmp := t.TempDir()
-	
+
 	srcFile := filepath.Join(tmp, "empty.txt")
 	if err := os.WriteFile(srcFile, []byte{}, 0644); err != nil {
 		t.Fatal(err)
 	}
-	
+
 	archiveFile := filepath.Join(tmp, "empty.bks")
 	if err := ExportStreamArchive(srcFile, archiveFile, "empty.txt", testPassword, 1024); err != nil {
 		t.Fatalf("ExportStreamArchive failed: %v", err)
 	}
-	
+
 	restoreDir := filepath.Join(tmp, "restore")
 	if err := os.MkdirAll(restoreDir, 0755); err != nil {
 		t.Fatal(err)
@@ -71,7 +70,7 @@ func TestStreamArchiveEmptyFile(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ImportStreamArchive failed: %v", err)
 	}
-	
+
 	info, err := os.Stat(restored)
 	if err != nil {
 		t.Fatalf("restored empty file does not exist: %v", err)
@@ -84,17 +83,17 @@ func TestStreamArchiveEmptyFile(t *testing.T) {
 // 誤ったパスワードでのインポートがエラーになることを確認する。
 func TestStreamArchiveWrongPassword(t *testing.T) {
 	tmp := t.TempDir()
-	
+
 	srcFile := filepath.Join(tmp, "secret.txt")
 	if err := os.WriteFile(srcFile, []byte("secret data"), 0644); err != nil {
 		t.Fatal(err)
 	}
-	
+
 	archiveFile := filepath.Join(tmp, "secret.bks")
 	if err := ExportStreamArchive(srcFile, archiveFile, "secret.txt", testPassword, 1024); err != nil {
 		t.Fatal(err)
 	}
-	
+
 	restoreDir := filepath.Join(tmp, "restore")
 	if err := os.MkdirAll(restoreDir, 0755); err != nil {
 		t.Fatal(err)
@@ -107,7 +106,7 @@ func TestStreamArchiveWrongPassword(t *testing.T) {
 // 破損・切り詰めされたアーカイブがパニックせずエラーになることを確認する。
 func TestImportTruncatedArchive(t *testing.T) {
 	tmp := t.TempDir()
-	
+
 	srcFile := filepath.Join(tmp, "source.bin")
 	if err := os.WriteFile(srcFile, bytes.Repeat([]byte("x"), 4096), 0644); err != nil {
 		t.Fatal(err)
@@ -116,17 +115,17 @@ func TestImportTruncatedArchive(t *testing.T) {
 	if err := ExportStreamArchive(srcFile, archiveFile, "source.bin", testPassword, 1024); err != nil {
 		t.Fatal(err)
 	}
-	
+
 	full, err := os.ReadFile(archiveFile)
 	if err != nil {
 		t.Fatal(err)
 	}
-	
+
 	restoreDir := filepath.Join(tmp, "restore")
 	if err := os.MkdirAll(restoreDir, 0755); err != nil {
 		t.Fatal(err)
 	}
-	
+
 	// 空ファイル・ヘッダ途中・名前途中・チャンク途中など、さまざまな位置で切り詰める
 	for _, size := range []int{0, 1, 5, 9, 20, len(full) / 2, len(full) - 2} {
 		truncated := filepath.Join(tmp, "truncated.bks")
@@ -142,7 +141,7 @@ func TestImportTruncatedArchive(t *testing.T) {
 // 巨大なチャンク長が宣言されたアーカイブを、メモリ確保前に拒否することを確認する。
 func TestImportOversizedChunkLength(t *testing.T) {
 	tmp := t.TempDir()
-	
+
 	srcFile := filepath.Join(tmp, "source.bin")
 	if err := os.WriteFile(srcFile, []byte("data"), 0644); err != nil {
 		t.Fatal(err)
@@ -151,22 +150,22 @@ func TestImportOversizedChunkLength(t *testing.T) {
 	if err := ExportStreamArchive(srcFile, archiveFile, "source.bin", testPassword, 1024); err != nil {
 		t.Fatal(err)
 	}
-	
+
 	full, err := os.ReadFile(archiveFile)
 	if err != nil {
 		t.Fatal(err)
 	}
-	
+
 	// 名前ブロックの直後にあるチャンク長を巨大な値に書き換える
 	nameLen := binary.BigEndian.Uint32(full[5:9])
 	chunkLenOffset := 9 + int(nameLen) + 4
 	binary.BigEndian.PutUint64(full[chunkLenOffset:chunkLenOffset+8], ^uint64(0))
-	
+
 	tampered := filepath.Join(tmp, "tampered.bks")
 	if err := os.WriteFile(tampered, full, 0644); err != nil {
 		t.Fatal(err)
 	}
-	
+
 	restoreDir := filepath.Join(tmp, "restore")
 	if err := os.MkdirAll(restoreDir, 0755); err != nil {
 		t.Fatal(err)
@@ -180,7 +179,7 @@ func TestImportOversizedChunkLength(t *testing.T) {
 // アーカイブ内の名前にパス要素が含まれる場合、リストア先の外に書き出されないことを確認する。
 func TestImportRejectsUnsafeFileName(t *testing.T) {
 	tmp := t.TempDir()
-	
+
 	for _, name := range []string{"../evil.txt", "..", "a/b.txt", `..\evil.txt`, ""} {
 		archiveFile := filepath.Join(tmp, "unsafe.bks")
 		fp, err := os.Create(archiveFile)
@@ -192,7 +191,9 @@ func TestImportRejectsUnsafeFileName(t *testing.T) {
 		err = ExportBks(
 			name,
 			func(length uint64) ([]byte, error) {
-				if offset >= len(content) { return []byte{}, nil }
+				if offset >= len(content) {
+					return []byte{}, nil
+				}
 				b := content[offset:]
 				offset = len(content)
 				return b, nil
@@ -208,7 +209,7 @@ func TestImportRejectsUnsafeFileName(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		
+
 		restoreDir := filepath.Join(tmp, "restore")
 		if err := os.MkdirAll(restoreDir, 0755); err != nil {
 			t.Fatal(err)
@@ -226,7 +227,7 @@ func TestImportRejectsUnsafeFileName(t *testing.T) {
 func TestIsSafeFileName(t *testing.T) {
 	safe := []string{"file.txt", "ファイル.dat", ".hidden", "a b c"}
 	unsafe := []string{"", ".", "..", "a/b", `a\b`, "../x", "/etc/passwd", "a\x00b"}
-	
+
 	for _, name := range safe {
 		if !IsSafeFileName(name) {
 			t.Errorf("expected %q to be safe", name)

@@ -7,9 +7,9 @@ import (
 	"time"
 )
 
-
 // エントリがディレクトリかファイルかを表す。
 type DirectoryEntryType byte
+
 const (
 	Unknown   DirectoryEntryType = 'U'
 	Directory DirectoryEntryType = 'D'

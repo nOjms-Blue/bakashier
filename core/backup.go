@@ -25,7 +25,7 @@ func backupManager(workers uint32, fromWorkerQueue <-chan messageFromWorkerToMan
 			Detail:   "",
 		}
 	}()
-	
+
 	var untreated int = 0
 	var untreatedMessage = []messageFromManagerToWorker{}
 	var stopWorkers bool = false
@@ -69,7 +69,7 @@ func backupManager(workers uint32, fromWorkerQueue <-chan messageFromWorkerToMan
 				time.Sleep(10 * time.Millisecond)
 			}
 		}
-		
+
 		// 一時停止中の場合は、ワーカーに送ったメッセージをすべて未処理に移動
 		if stopWorkers {
 			func() {
@@ -83,7 +83,7 @@ func backupManager(workers uint32, fromWorkerQueue <-chan messageFromWorkerToMan
 				}
 			}()
 		}
-		
+
 		// 終了指示が来た場合は、ワーカーに送ったメッセージをすべて破棄して終了指示を送る
 		if termination {
 			// ワーカーに送ったメッセージをすべて破棄して終了指示を送る
@@ -102,7 +102,7 @@ func backupManager(workers uint32, fromWorkerQueue <-chan messageFromWorkerToMan
 			messages := len(untreatedMessage)
 			untreatedMessage = make([]messageFromManagerToWorker, 0)
 			untreated -= messages
-			
+
 			for i := 0; i < untreated; i++ {
 				toWorkerQueue <- messageFromManagerToWorker{
 					MsgType: EXIT,
@@ -112,7 +112,7 @@ func backupManager(workers uint32, fromWorkerQueue <-chan messageFromWorkerToMan
 				}
 			}
 		}
-		
+
 		// 全ジョブが完了した場合は、各ワーカーに EXIT を送って終了
 		if untreated <= 0 {
 			for i := uint32(0); i < workers; i++ {
@@ -125,20 +125,26 @@ func backupManager(workers uint32, fromWorkerQueue <-chan messageFromWorkerToMan
 			}
 			break
 		}
-		
+
 		// ジョブの配分
 		for {
 			// メッセージが来た場合は、受信メッセージを先に処理する
-			if len(fromViewQueue) != 0 { break }
-			if len(fromWorkerQueue) != 0 { break }
-			if len(untreatedMessage) == 0 { break }
-			
+			if len(fromViewQueue) != 0 {
+				break
+			}
+			if len(fromWorkerQueue) != 0 {
+				break
+			}
+			if len(untreatedMessage) == 0 {
+				break
+			}
+
 			// 一時停止中または終了指示が来た場合は、ジョブを配分しない
 			if stopWorkers || termination {
 				time.Sleep(10 * time.Millisecond)
 				break
 			}
-			
+
 			// 未処理のジョブを配分する
 			msg := untreatedMessage[0]
 			select {
@@ -156,20 +162,20 @@ func backupManager(workers uint32, fromWorkerQueue <-chan messageFromWorkerToMan
 func backupWorker(workerId uint, password string, toManagerQueue chan<- messageFromWorkerToManager, fromManagerQueue <-chan messageFromManagerToWorker, toViewQueue chan<- view.MessageToView, wg *sync.WaitGroup, chunkSize uint64, limit SettingsLimit) {
 	defer wg.Done()
 	var processedSize uint64 = 0
-	
+
 	toViewQueue <- view.MessageToView{
 		Source:   view.WORKER,
 		MsgType:  view.ADD_WORKER,
 		WorkerId: workerId,
 		Detail:   "",
 	}
-	
+
 	for {
 		queue := <-fromManagerQueue
 		if queue.MsgType == EXIT {
 			break
 		}
-		
+
 		var errHandler = func(prefix string, err error) {
 			toManagerQueue <- messageFromWorkerToManager{
 				WorkerId: workerId,
@@ -179,7 +185,7 @@ func backupWorker(workerId uint, password string, toManagerQueue chan<- messageF
 				Detail:   fmt.Sprintf("%s: %s", prefix, err.Error()),
 			}
 		}
-		
+
 		toViewQueue <- view.MessageToView{
 			Source:   view.WORKER,
 			MsgType:  view.START_DIR,
@@ -188,24 +194,24 @@ func backupWorker(workerId uint, password string, toManagerQueue chan<- messageF
 			DistPath: queue.DistDir,
 			Detail:   "",
 		}
-		
+
 		func() {
 			err := os.MkdirAll(queue.DistDir, 0755)
 			if err != nil {
 				errHandler("Failed to create directory", err)
 				return
 			}
-			
+
 			files, err := os.ReadDir(queue.SrcDir)
 			if err != nil {
 				errHandler("Failed to read directory", err)
 				return
 			}
-			
+
 			nameMap := make(map[string]string)                 // [HideName]RealName
 			newEntries := make(map[string]data.DirectoryEntry) // [HideName]DirectoryEntry
 			directoryEntryFile := filepath.Join(queue.DistDir, "_directory_.bks")
-			
+
 			// 既存の _directory_.bks が存在しない場合は、中断されたバックアップを削除する。
 			if _, err := os.Stat(directoryEntryFile); err != nil {
 				items, err := os.ReadDir(queue.DistDir)
@@ -219,7 +225,7 @@ func backupWorker(workerId uint, password string, toManagerQueue chan<- messageF
 					}
 				}
 			}
-			
+
 			// 既存の _directory_.bks からエントリ一覧を読み込む。
 			entries, err := loadDirectoryEntries(directoryEntryFile, password)
 			if err != nil {
@@ -230,36 +236,44 @@ func backupWorker(workerId uint, password string, toManagerQueue chan<- messageF
 			for _, entry := range entries {
 				nameMap[entry.HideName] = entry.RealName
 			}
-			
+
 			moved, err := checkMovedDirs(queue.SrcDir, queue.DistDir, entries, files, password)
 			if err != nil {
 				errHandler("Failed to check moved directories", err)
 				return
 			}
-			
+
 			// バックアップの実行
 			isExistChanges := false
 			for _, file := range files {
 				hideName := utils.GenerateUniqueRandomName(nameMap)
 				entry := data.DirectoryEntry{Type: data.Unknown}
 				for _, move := range moved {
-					if move.AfterRealName != file.Name() { continue }
-					
+					if move.AfterRealName != file.Name() {
+						continue
+					}
+
 					for index, registered := range entries {
-						if registered.Type != data.Directory { continue }
+						if registered.Type != data.Directory {
+							continue
+						}
 						if move.HideName == registered.HideName {
 							entry = registered
 							entry.RealName = move.AfterRealName
 							info, err := file.Info()
-							if err == nil { entry.ModTime = info.ModTime() }
+							if err == nil {
+								entry.ModTime = info.ModTime()
+							}
 							entries[index] = entry
-							
+
 							hideName = move.HideName
 							isExistChanges = true
 							break
 						}
 					}
-					if entry.Type != data.Unknown { break }
+					if entry.Type != data.Unknown {
+						break
+					}
 				}
 				if entry.Type == data.Unknown {
 					for _, registered := range entries {
@@ -271,7 +285,7 @@ func backupWorker(workerId uint, password string, toManagerQueue chan<- messageF
 					}
 				}
 				nameMap[hideName] = file.Name()
-				
+
 				if file.IsDir() {
 					// ディレクトリエントリを追加
 					newEntries[hideName] = data.DirectoryEntry{
@@ -281,14 +295,14 @@ func backupWorker(workerId uint, password string, toManagerQueue chan<- messageF
 						Size:     uint64(0),
 						ModTime:  time.Now(),
 					}
-					
+
 					// 既存のエントリと異なる場合は変更があると判定 または バックアップ先にディレクトリが存在しない場合は変更があると判定
 					if entry.Type != data.Directory || entry.RealName != file.Name() {
 						isExistChanges = true
 					} else if _, err := os.Stat(filepath.Join(queue.DistDir, hideName)); err != nil {
 						isExistChanges = true
 					}
-					
+
 					// 子ディレクトリの発見をディスパッチャに通知
 					toManagerQueue <- messageFromWorkerToManager{
 						WorkerId: workerId,
@@ -307,7 +321,7 @@ func backupWorker(workerId uint, password string, toManagerQueue chan<- messageF
 						DistPath: filepath.Join(queue.DistDir, fmt.Sprintf("%s.bks", hideName)),
 						Detail:   "",
 					}
-					
+
 					func() {
 						isNotChangeFile := false
 						fileInfo, err := file.Info()
@@ -315,28 +329,28 @@ func backupWorker(workerId uint, password string, toManagerQueue chan<- messageF
 							errHandler("Failed to get file info", err)
 							return
 						}
-						
+
 						// 変更がないか
 						if entry.Type == data.File {
 							if entry.Size == uint64(fileInfo.Size()) && entry.ModTime.Equal(fileInfo.ModTime()) {
 								isNotChangeFile = true
 							}
 						}
-						
+
 						// バックアップ先にファイルが存在しない場合は変更があると判定
 						if isNotChangeFile {
 							if _, err := os.Stat(filepath.Join(queue.DistDir, fmt.Sprintf("%s.bks", hideName))); err != nil {
 								isNotChangeFile = false
 							}
 						}
-						
+
 						// 変更がない場合はスキップ
 						if isNotChangeFile {
 							newEntries[hideName] = entry
 							return
 						}
 						isExistChanges = true
-						
+
 						// ファイルをバックアップ
 						srcFile := filepath.Join(queue.SrcDir, file.Name())
 						archiveFile := filepath.Join(queue.DistDir, fmt.Sprintf("%s.bks", hideName))
@@ -345,7 +359,7 @@ func backupWorker(workerId uint, password string, toManagerQueue chan<- messageF
 							errHandler("Failed to export stream archive", err)
 							return
 						}
-						
+
 						// ファイルエントリを追加
 						newEntries[hideName] = data.DirectoryEntry{
 							Type:     data.File,
@@ -354,7 +368,7 @@ func backupWorker(workerId uint, password string, toManagerQueue chan<- messageF
 							Size:     uint64(fileInfo.Size()),
 							ModTime:  fileInfo.ModTime(),
 						}
-						
+
 						if limit.Size > 0 && limit.Wait > 0 {
 							processedSize += uint64(fileInfo.Size())
 							if limit.Size > 0 && processedSize >= limit.Size {
@@ -363,7 +377,7 @@ func backupWorker(workerId uint, password string, toManagerQueue chan<- messageF
 							}
 						}
 					}()
-					
+
 					// ファイル処理完了をビューに通知
 					toViewQueue <- view.MessageToView{
 						Source:   view.WORKER,
@@ -375,7 +389,7 @@ func backupWorker(workerId uint, password string, toManagerQueue chan<- messageF
 					}
 				}
 			}
-			
+
 			// 既存のエントリから削除されたファイルを削除する。
 			if isExistEntries {
 				for _, entry := range entries {
@@ -389,7 +403,7 @@ func backupWorker(workerId uint, password string, toManagerQueue chan<- messageF
 					}
 				}
 			}
-			
+
 			// エントリに存在しないバックアップファイルを削除
 			dstFiles, err := os.ReadDir(queue.DistDir)
 			if err != nil {
@@ -405,7 +419,7 @@ func backupWorker(workerId uint, password string, toManagerQueue chan<- messageF
 						continue
 					}
 				}
-				
+
 				for _, entry := range newEntries {
 					if entry.Type == data.File {
 						if fmt.Sprintf("%s.bks", entry.HideName) == dstFile.Name() {
@@ -419,7 +433,7 @@ func backupWorker(workerId uint, password string, toManagerQueue chan<- messageF
 						}
 					}
 				}
-				
+
 				if !isExist {
 					if dstFile.IsDir() {
 						os.RemoveAll(filepath.Join(queue.DistDir, dstFile.Name()))
@@ -428,7 +442,7 @@ func backupWorker(workerId uint, password string, toManagerQueue chan<- messageF
 					}
 				}
 			}
-			
+
 			// ディレクトリエントリを保存
 			if isExistChanges {
 				entries = make([]data.DirectoryEntry, 0, len(newEntries))
@@ -447,7 +461,7 @@ func backupWorker(workerId uint, password string, toManagerQueue chan<- messageF
 				}
 			}
 		}()
-		
+
 		toViewQueue <- view.MessageToView{
 			Source:   view.WORKER,
 			MsgType:  view.FINISH_DIR,
@@ -470,31 +484,31 @@ func backupWorker(workerId uint, password string, toManagerQueue chan<- messageF
 // マネージャ1つと複数のワーカーを起動し、チャネルでジョブを分配する。
 func Backup(settings Settings, toViewQueue chan<- view.MessageToView, fromViewQueue <-chan view.MessageToManager) {
 	var wg sync.WaitGroup
-	
+
 	workers := settings.Workers
 	queueSize := workers * 8
 	if workers <= 0 {
 		workers = 1
 		queueSize = 8
 	}
-	
+
 	workerToManagerQueue := make(chan messageFromWorkerToManager, queueSize)
 	managerToWorkerQueue := make(chan messageFromManagerToWorker, queueSize)
-	
+
 	workerToManagerQueue <- messageFromWorkerToManager{
 		MsgType: FIND_DIR,
 		SrcDir:  settings.SrcDir,
 		DistDir: settings.DistDir,
 		Detail:  "",
 	}
-	
+
 	wg.Add(int(workers) + 1)
 	go backupManager(workers, workerToManagerQueue, managerToWorkerQueue, toViewQueue, fromViewQueue, &wg)
 	for i := uint(0); i < uint(workers); i++ {
 		go backupWorker(i+1, settings.Password, workerToManagerQueue, managerToWorkerQueue, toViewQueue, &wg, settings.ChunkSize, settings.Limit)
 	}
 	wg.Wait()
-	
+
 	close(workerToManagerQueue)
 	close(managerToWorkerQueue)
 }

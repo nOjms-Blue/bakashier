@@ -2,10 +2,9 @@ package view
 
 import (
 	"bakashier/cli"
-	
+
 	tea "github.com/charmbracelet/bubbletea"
 )
-
 
 func Run(mode cli.ModeType, receiveQueue <-chan MessageToView, sendQueue chan<- MessageToManager) (model, error) {
 	m := model{

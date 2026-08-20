@@ -1,6 +1,5 @@
 package core
 
-
 // ディスパッチャが扱うメッセージの種類。
 type workerToManagerMessageType string
 

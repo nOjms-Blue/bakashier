@@ -3,11 +3,10 @@ package cli
 import (
 	"errors"
 	"fmt"
-	
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/bubbles/textinput"
-)
 
+	"github.com/charmbracelet/bubbles/textinput"
+	tea "github.com/charmbracelet/bubbletea"
+)
 
 // ErrCanceled はユーザーが入力をキャンセルしたことを表します。
 var ErrCanceled = errors.New("password input canceled")
@@ -26,13 +25,13 @@ func newPasswordModel() passwordModel {
 	ti.Placeholder = ""
 	ti.Focus()
 	ti.CharLimit = 0
-	
+
 	// パスワード入力（伏字）
 	ti.EchoMode = textinput.EchoPassword
 	ti.EchoCharacter = '•' // 好みで '*' などに
-	
+
 	return passwordModel{
-		ti:     ti,
+		ti: ti,
 	}
 }
 
@@ -54,14 +53,16 @@ func (m passwordModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, tea.Quit
 		}
 	}
-	
+
 	var cmd tea.Cmd
 	m.ti, cmd = m.ti.Update(msg)
 	return m, cmd
 }
 
 func (m passwordModel) View() string {
-	if m.done { return "" }
+	if m.done {
+		return ""
+	}
 	return fmt.Sprintf("Password %s\n(Enter: OK, Esc/Ctrl+C: Cancel)", m.ti.View())
 }
 
@@ -69,12 +70,16 @@ func (m passwordModel) View() string {
 // キャンセル時は ErrCanceled を返します。
 func InputPassword() (string, error) {
 	m := newPasswordModel()
-	
+
 	p := tea.NewProgram(m)
 	finalModel, err := p.Run()
-	if err != nil { return "", err }
-	
+	if err != nil {
+		return "", err
+	}
+
 	pm := finalModel.(passwordModel)
-	if pm.canceled { return "", ErrCanceled }
+	if pm.canceled {
+		return "", ErrCanceled
+	}
 	return pm.value, nil
 }

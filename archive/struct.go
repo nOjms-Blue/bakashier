@@ -1,8 +1,7 @@
 package archive
 
-
 type BksArchive struct {
-	Password string
+	Password  string
 	ChunkSize int64
 }
 

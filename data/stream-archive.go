@@ -9,7 +9,6 @@ import (
 	"strings"
 )
 
-
 var ChunkSize uint64 = 16 * 1024 * 1024 // 16MB
 
 // アーカイブ由来の名前が、ディレクトリ要素を含まない安全な単一のファイル名かを検証する。
@@ -30,39 +29,55 @@ func IsSafeFileName(name string) bool {
 // ファイルから最大 length バイトを読み込む。io.ReadFull により部分読み込み（short read）でも
 // 実際に読めたバイト数だけを返し、ゼロ埋めデータが混入しないことを保証する。
 func readChunkFull(r io.Reader, length uint64) ([]byte, error) {
-	if length == 0 { return []byte{}, nil }
+	if length == 0 {
+		return []byte{}, nil
+	}
 	chunk := make([]byte, length)
 	n, err := io.ReadFull(r, chunk)
 	if err == io.EOF || err == io.ErrUnexpectedEOF {
 		return chunk[:n], nil
 	}
-	if err != nil { return []byte{}, err }
+	if err != nil {
+		return []byte{}, err
+	}
 	return chunk, nil
 }
 
 func ExportStreamArchive(srcFile string, dstFile string, fileName string, password string, chunkSize uint64) error {
 	// ソースファイルのサイズを取得
 	fileInfo, err := os.Stat(srcFile)
-	if err != nil { return err }
+	if err != nil {
+		return err
+	}
 	remainFileSize := uint64(fileInfo.Size())
-	
+
 	// ソースファイルを開く
 	src, err := os.Open(srcFile)
-	if err != nil { return err }
+	if err != nil {
+		return err
+	}
 	defer src.Close()
-	
+
 	// 書き出し先ファイルを開く
 	dst, err := os.Create(dstFile)
-	if err != nil { return err }
+	if err != nil {
+		return err
+	}
 
 	err = ExportBks(
 		fileName,
 		func(length uint64) ([]byte, error) {
-			if remainFileSize == 0 { return []byte{}, nil }
-			if remainFileSize < length { length = remainFileSize }
-			
+			if remainFileSize == 0 {
+				return []byte{}, nil
+			}
+			if remainFileSize < length {
+				length = remainFileSize
+			}
+
 			chunk, err := readChunkFull(src, length)
-			if err != nil { return []byte{}, err }
+			if err != nil {
+				return []byte{}, err
+			}
 			remainFileSize = remainFileSize - uint64(len(chunk))
 			return chunk, nil
 		},
@@ -79,19 +94,21 @@ func ExportStreamArchive(srcFile string, dstFile string, fileName string, passwo
 		os.Remove(dstFile)
 		return err
 	}
-	
+
 	return dst.Close()
 }
 
 func ImportStreamArchive(archiveFile string, dstDirectory string, password string) (string, error) {
 	var dstFile string = ""
 	var dst *os.File = nil
-	
+
 	// アーカイブファイルを開く
 	archive, err := os.Open(archiveFile)
-	if err != nil { return "", err }
+	if err != nil {
+		return "", err
+	}
 	defer archive.Close()
-	
+
 	err = ImportBks(
 		func(length uint64) ([]byte, error) {
 			return readChunkFull(archive, length)
@@ -104,7 +121,9 @@ func ImportStreamArchive(archiveFile string, dstDirectory string, password strin
 				}
 				dstFile = filepath.Join(dstDirectory, name)
 				dst, err = os.Create(dstFile)
-				if err != nil { return err }
+				if err != nil {
+					return err
+				}
 			}
 			_, err = dst.Write(data)
 			return err
@@ -113,16 +132,20 @@ func ImportStreamArchive(archiveFile string, dstDirectory string, password strin
 	)
 	if dst != nil {
 		closeErr := dst.Close()
-		if err == nil { err = closeErr }
+		if err == nil {
+			err = closeErr
+		}
 	}
 	if err != nil {
 		// 失敗時は不完全な出力ファイルを残さない
-		if dstFile != "" { os.Remove(dstFile) }
+		if dstFile != "" {
+			os.Remove(dstFile)
+		}
 		return "", err
 	}
 	if dstFile == "" {
 		return "", errors.New("archive did not contain any file data")
 	}
-	
+
 	return dstFile, nil
 }

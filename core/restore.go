@@ -6,11 +6,10 @@ import (
 	"path/filepath"
 	"sync"
 	"time"
-	
+
 	"bakashier/data"
 	"bakashier/view"
 )
-
 
 // キューからメッセージを受け取り、ワーカーにジョブを配分する。
 // 全ジョブ完了後に各ワーカーに EXIT を送って終了する。
@@ -24,7 +23,7 @@ func restoreManager(workers uint32, fromWorkerQueue <-chan messageFromWorkerToMa
 			Detail:   "",
 		}
 	}()
-	
+
 	var untreated int = 0
 	var untreatedMessage = []messageFromManagerToWorker{}
 	var stopWorkers bool = false
@@ -68,7 +67,7 @@ func restoreManager(workers uint32, fromWorkerQueue <-chan messageFromWorkerToMa
 				time.Sleep(10 * time.Millisecond)
 			}
 		}
-		
+
 		// 一時停止中の場合は、ワーカーに送ったメッセージをすべて未処理に移動
 		if stopWorkers {
 			func() {
@@ -82,7 +81,7 @@ func restoreManager(workers uint32, fromWorkerQueue <-chan messageFromWorkerToMa
 				}
 			}()
 		}
-		
+
 		// 終了指示が来た場合は、ワーカーに送ったメッセージをすべて破棄して終了指示を送る
 		if termination {
 			func() {
@@ -100,7 +99,7 @@ func restoreManager(workers uint32, fromWorkerQueue <-chan messageFromWorkerToMa
 			messages := len(untreatedMessage)
 			untreatedMessage = make([]messageFromManagerToWorker, 0)
 			untreated -= messages
-			
+
 			for i := 0; i < untreated; i++ {
 				toWorkerQueue <- messageFromManagerToWorker{
 					MsgType: EXIT,
@@ -110,7 +109,7 @@ func restoreManager(workers uint32, fromWorkerQueue <-chan messageFromWorkerToMa
 				}
 			}
 		}
-		
+
 		// 全ジョブが完了した場合は、各ワーカーに EXIT を送って終了
 		if untreated <= 0 {
 			for i := uint32(0); i < workers; i++ {
@@ -123,20 +122,26 @@ func restoreManager(workers uint32, fromWorkerQueue <-chan messageFromWorkerToMa
 			}
 			break
 		}
-		
+
 		// ジョブの配分
 		for {
 			// メッセージが来た場合は、受信メッセージを先に処理する
-			if len(fromViewQueue) != 0 { break }
-			if len(fromWorkerQueue) != 0 { break }
-			if len(untreatedMessage) == 0 { break }
-			
+			if len(fromViewQueue) != 0 {
+				break
+			}
+			if len(fromWorkerQueue) != 0 {
+				break
+			}
+			if len(untreatedMessage) == 0 {
+				break
+			}
+
 			// 一時停止中または終了指示が来た場合は、ジョブを配分しない
 			if stopWorkers || termination {
 				time.Sleep(10 * time.Millisecond)
 				break
 			}
-			
+
 			// 未処理のジョブを配分する
 			msg := untreatedMessage[0]
 			select {
@@ -154,18 +159,20 @@ func restoreManager(workers uint32, fromWorkerQueue <-chan messageFromWorkerToMa
 func restoreWorker(workerId uint, password string, toManagerQueue chan<- messageFromWorkerToManager, fromManagerQueue <-chan messageFromManagerToWorker, toViewQueue chan<- view.MessageToView, wg *sync.WaitGroup, limit SettingsLimit) {
 	defer wg.Done()
 	var processedSize uint64 = 0
-	
+
 	toViewQueue <- view.MessageToView{
 		Source:   view.WORKER,
 		MsgType:  view.ADD_WORKER,
 		WorkerId: workerId,
 		Detail:   "",
 	}
-	
+
 	for {
 		queue := <-fromManagerQueue
-		if queue.MsgType == EXIT { break }
-		
+		if queue.MsgType == EXIT {
+			break
+		}
+
 		var errHandler = func(prefix string, err error) {
 			toManagerQueue <- messageFromWorkerToManager{
 				WorkerId: workerId,
@@ -175,7 +182,7 @@ func restoreWorker(workerId uint, password string, toManagerQueue chan<- message
 				Detail:   fmt.Sprintf("%s: %s", prefix, err.Error()),
 			}
 		}
-		
+
 		// ディレクトリ処理開始をビューに通知
 		toViewQueue <- view.MessageToView{
 			Source:   view.WORKER,
@@ -185,14 +192,14 @@ func restoreWorker(workerId uint, password string, toManagerQueue chan<- message
 			DistPath: queue.DistDir,
 			Detail:   "",
 		}
-		
+
 		func() {
 			err := os.MkdirAll(queue.DistDir, 0755)
 			if err != nil {
 				errHandler("Failed to create directory", err)
 				return
 			}
-			
+
 			// _directory_.bks からエントリ一覧を読み込む。
 			directoryEntryFile := filepath.Join(queue.SrcDir, "_directory_.bks")
 			entries, err := loadDirectoryEntries(directoryEntryFile, password)
@@ -200,7 +207,7 @@ func restoreWorker(workerId uint, password string, toManagerQueue chan<- message
 				errHandler("Failed to load directory entries", err)
 				return
 			}
-			
+
 			// リストアを実行
 			for _, entry := range entries {
 				// パストラバーサル対策: エントリ名がディレクトリ要素を含む場合はスキップする
@@ -208,7 +215,7 @@ func restoreWorker(workerId uint, password string, toManagerQueue chan<- message
 					errHandler("Unsafe entry name", fmt.Errorf("real=%q hide=%q", entry.RealName, entry.HideName))
 					continue
 				}
-				
+
 				switch entry.Type {
 				case data.Directory:
 					hiddenDir := filepath.Join(queue.SrcDir, entry.HideName)
@@ -218,7 +225,7 @@ func restoreWorker(workerId uint, password string, toManagerQueue chan<- message
 						errHandler("Failed to create directory", err)
 						return
 					}
-					
+
 					// 子ディレクトリの発見をディスパッチャに通知
 					toManagerQueue <- messageFromWorkerToManager{
 						WorkerId: workerId,
@@ -229,7 +236,7 @@ func restoreWorker(workerId uint, password string, toManagerQueue chan<- message
 					}
 				case data.File:
 					archiveFile := filepath.Join(queue.SrcDir, fmt.Sprintf("%s.bks", entry.HideName))
-					
+
 					// ファイル処理開始をビューに通知
 					toViewQueue <- view.MessageToView{
 						Source:   view.WORKER,
@@ -239,7 +246,7 @@ func restoreWorker(workerId uint, password string, toManagerQueue chan<- message
 						DistPath: filepath.Join(queue.DistDir, entry.RealName),
 						Detail:   "",
 					}
-					
+
 					func() {
 						realFile, err := data.ImportStreamArchive(archiveFile, queue.DistDir, password)
 						if err != nil {
@@ -247,7 +254,7 @@ func restoreWorker(workerId uint, password string, toManagerQueue chan<- message
 							return
 						}
 						_ = os.Chtimes(realFile, time.Now(), entry.ModTime)
-						
+
 						if limit.Size > 0 && limit.Wait > 0 {
 							processedSize += uint64(entry.Size)
 							if limit.Size > 0 && processedSize >= limit.Size {
@@ -256,7 +263,7 @@ func restoreWorker(workerId uint, password string, toManagerQueue chan<- message
 							}
 						}
 					}()
-					
+
 					// ファイル処理完了をビューに通知
 					toViewQueue <- view.MessageToView{
 						Source:   view.WORKER,
@@ -272,7 +279,7 @@ func restoreWorker(workerId uint, password string, toManagerQueue chan<- message
 				}
 			}
 		}()
-		
+
 		// ディレクトリ処理完了をビューに通知
 		toViewQueue <- view.MessageToView{
 			Source:   view.WORKER,
@@ -282,7 +289,7 @@ func restoreWorker(workerId uint, password string, toManagerQueue chan<- message
 			DistPath: queue.DistDir,
 			Detail:   "",
 		}
-		
+
 		// ディレクトリ処理完了をディスパッチャに通知
 		toManagerQueue <- messageFromWorkerToManager{
 			WorkerId: workerId,
@@ -298,31 +305,31 @@ func restoreWorker(workerId uint, password string, toManagerQueue chan<- message
 // マネージャ1つと複数のワーカーを起動し、チャネルでジョブを分配する。
 func Restore(settings Settings, toViewQueue chan<- view.MessageToView, fromViewQueue <-chan view.MessageToManager) {
 	var wg sync.WaitGroup
-	
+
 	workers := settings.Workers
 	queueSize := workers * 8
 	if workers <= 0 {
 		workers = 1
 		queueSize = 8
 	}
-	
+
 	workerToManagerQueue := make(chan messageFromWorkerToManager, queueSize)
 	managerToWorkerQueue := make(chan messageFromManagerToWorker, queueSize)
-	
+
 	workerToManagerQueue <- messageFromWorkerToManager{
 		MsgType: FIND_DIR,
 		SrcDir:  settings.SrcDir,
 		DistDir: settings.DistDir,
 		Detail:  "",
 	}
-	
+
 	wg.Add(int(workers) + 1)
 	go restoreManager(workers, workerToManagerQueue, managerToWorkerQueue, toViewQueue, fromViewQueue, &wg)
 	for i := uint(0); i < uint(workers); i++ {
 		go restoreWorker(i+1, settings.Password, workerToManagerQueue, managerToWorkerQueue, toViewQueue, &wg, settings.Limit)
 	}
 	wg.Wait()
-	
+
 	close(workerToManagerQueue)
 	close(managerToWorkerQueue)
 }

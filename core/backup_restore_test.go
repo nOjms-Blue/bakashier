@@ -5,18 +5,17 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
-	
+
 	"bakashier/view"
 )
-
 
 // Backup と Restore を実行し、ビューへのメッセージを破棄しながら完了を待つ。
 func runWithDrainedView(t *testing.T, run func(toView chan<- view.MessageToView, fromView <-chan view.MessageToManager)) []string {
 	t.Helper()
-	
+
 	toView := make(chan view.MessageToView, 64)
 	fromView := make(chan view.MessageToManager, 64)
-	
+
 	errorLog := make(chan string, 1024)
 	drainDone := make(chan struct{})
 	go func() {
@@ -27,12 +26,12 @@ func runWithDrainedView(t *testing.T, run func(toView chan<- view.MessageToView,
 			}
 		}
 	}()
-	
+
 	run(toView, fromView)
 	close(toView)
 	<-drainDone
 	close(errorLog)
-	
+
 	errors := []string{}
 	for e := range errorLog {
 		errors = append(errors, e)
@@ -46,13 +45,13 @@ func TestBackupRestoreRoundtrip(t *testing.T) {
 	srcDir := filepath.Join(tmp, "src")
 	backupDir := filepath.Join(tmp, "backup")
 	restoreDir := filepath.Join(tmp, "restore")
-	
+
 	// テスト用のディレクトリツリーを作成（空ファイル・空ディレクトリ・ネストを含む）
 	files := map[string][]byte{
-		"a.txt":              []byte("hello world"),
-		"empty.txt":          {},
-		"sub/b.bin":          bytes.Repeat([]byte{0xde, 0xad, 0xbe, 0xef}, 1024),
-		"sub/deep/c.txt":     []byte("nested file"),
+		"a.txt":            []byte("hello world"),
+		"empty.txt":        {},
+		"sub/b.bin":        bytes.Repeat([]byte{0xde, 0xad, 0xbe, 0xef}, 1024),
+		"sub/deep/c.txt":   []byte("nested file"),
 		"sub2/日本語ファイル.txt": []byte("日本語の内容"),
 	}
 	if err := os.MkdirAll(filepath.Join(srcDir, "emptydir"), 0755); err != nil {
@@ -67,7 +66,7 @@ func TestBackupRestoreRoundtrip(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	
+
 	settings := Settings{
 		SrcDir:    srcDir,
 		DistDir:   backupDir,
@@ -75,7 +74,7 @@ func TestBackupRestoreRoundtrip(t *testing.T) {
 		Workers:   2,
 		ChunkSize: 1024,
 	}
-	
+
 	// バックアップ
 	errors := runWithDrainedView(t, func(toView chan<- view.MessageToView, fromView <-chan view.MessageToManager) {
 		Backup(settings, toView, fromView)
@@ -83,7 +82,7 @@ func TestBackupRestoreRoundtrip(t *testing.T) {
 	if len(errors) > 0 {
 		t.Fatalf("backup reported errors: %v", errors)
 	}
-	
+
 	// リストア
 	settings.SrcDir = backupDir
 	settings.DistDir = restoreDir
@@ -93,7 +92,7 @@ func TestBackupRestoreRoundtrip(t *testing.T) {
 	if len(errors) > 0 {
 		t.Fatalf("restore reported errors: %v", errors)
 	}
-	
+
 	// 内容の検証
 	for name, content := range files {
 		path := filepath.Join(restoreDir, filepath.FromSlash(name))

@@ -10,9 +10,13 @@ import (
 func loadDirectoryEntries(directoryEntryFile string, password string) ([]data.DirectoryEntry, error) {
 	if _, err := os.Stat(directoryEntryFile); err == nil {
 		_, content, err := data.ImportAll(directoryEntryFile, password)
-		if err != nil { return []data.DirectoryEntry{}, err }
+		if err != nil {
+			return []data.DirectoryEntry{}, err
+		}
 		entries, err := data.ImportDirectoryEntries(content)
-		if err != nil { return []data.DirectoryEntry{}, err }
+		if err != nil {
+			return []data.DirectoryEntry{}, err
+		}
 		return entries, nil
 	}
 	return []data.DirectoryEntry{}, nil
