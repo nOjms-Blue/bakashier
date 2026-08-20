@@ -32,13 +32,10 @@ func (bks BksArchive) Import(reader io.Reader, getWriter func(name string) (io.W
 	password := bks.Password
 
 	// ヘッダの最小部分の取得
-	header := make([]byte, 9)
-	n, err := io.ReadFull(reader, header)
+	header := [9]byte{0, 0, 0, 0, 0, 0, 0, 0, 0}
+	_, err := io.ReadFull(reader, header[:])
 	if err != nil {
 		return err
-	}
-	if n != 9 {
-		return errors.New("file is not a valid archived file (header too short)")
 	}
 
 	// 形式判定
@@ -57,26 +54,23 @@ func (bks BksArchive) Import(reader io.Reader, getWriter func(name string) (io.W
 		return fmt.Errorf("invalid archive: name block too large (%d bytes)", chunkLength32)
 	}
 	chunk := make([]byte, chunkLength32)
-	n, err = io.ReadFull(reader, chunk)
+	_, err = io.ReadFull(reader, chunk)
 	if err != nil {
 		return err
-	}
-	if int(chunkLength32) != n {
-		return errors.New("invalid archive: truncated name block")
 	}
 	chunkCRC := make([]byte, 4)
-	n, err = io.ReadFull(reader, chunkCRC)
+	_, err = io.ReadFull(reader, chunkCRC)
 	if err != nil {
 		return err
-	}
-	if n != 4 {
-		return errors.New("invalid archive: truncated name hash")
 	}
 	originalBytes, err := importProcess(chunk, chunkCRC, password)
 	if err != nil {
 		return err
 	}
 	name := string(originalBytes)
+	if !IsSafeFileName(name) {
+		return errors.New("invalid archive: unsafe name")
+	}
 
 	// writer の取得
 	writer, err := getWriter(name)
