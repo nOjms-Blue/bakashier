@@ -65,11 +65,11 @@ func (bks BksArchive) Export(name string, reader io.Reader, writer io.Writer) er
 	chunkLenBytes = make([]byte, 8)
 	for {
 		// 1チャンク分読み取り
-		n, err := reader.Read(buf)
-		if err == io.EOF {
+		n, err := io.ReadFull(reader, buf)
+		if n == 0 || err == io.EOF {
 			break
 		}
-		if err != nil {
+		if err != nil && err != io.ErrUnexpectedEOF {
 			return err
 		}
 

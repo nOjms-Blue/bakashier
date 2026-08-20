@@ -33,7 +33,7 @@ func (bks BksArchive) Import(reader io.Reader, getWriter func(name string) (io.W
 
 	// ヘッダの最小部分の取得
 	header := make([]byte, 9)
-	n, err := reader.Read(header)
+	n, err := io.ReadFull(reader, header)
 	if err != nil {
 		return err
 	}
@@ -57,7 +57,7 @@ func (bks BksArchive) Import(reader io.Reader, getWriter func(name string) (io.W
 		return fmt.Errorf("invalid archive: name block too large (%d bytes)", chunkLength32)
 	}
 	chunk := make([]byte, chunkLength32)
-	n, err = reader.Read(chunk)
+	n, err = io.ReadFull(reader, chunk)
 	if err != nil {
 		return err
 	}
@@ -65,7 +65,7 @@ func (bks BksArchive) Import(reader io.Reader, getWriter func(name string) (io.W
 		return errors.New("invalid archive: truncated name block")
 	}
 	chunkCRC := make([]byte, 4)
-	n, err = reader.Read(chunkCRC)
+	n, err = io.ReadFull(reader, chunkCRC)
 	if err != nil {
 		return err
 	}
@@ -88,7 +88,7 @@ func (bks BksArchive) Import(reader io.Reader, getWriter func(name string) (io.W
 	chunkLenBytes := make([]byte, 8)
 	chunkLength := uint64(0)
 	for {
-		n, err := reader.Read(chunkLenBytes)
+		n, err := io.ReadFull(reader, chunkLenBytes)
 		if n == 0 || err == io.EOF {
 			break
 		}
@@ -105,7 +105,7 @@ func (bks BksArchive) Import(reader io.Reader, getWriter func(name string) (io.W
 
 		// チャンクを読み込む
 		chunk = make([]byte, chunkLength)
-		n, err = reader.Read(chunk)
+		n, err = io.ReadFull(reader, chunk)
 		if err != nil {
 			return err
 		}
@@ -115,7 +115,7 @@ func (bks BksArchive) Import(reader io.Reader, getWriter func(name string) (io.W
 
 		// CRC32 ハッシュを読み込む
 		chunkCRC = make([]byte, 4)
-		n, err = reader.Read(chunkCRC)
+		n, err = io.ReadFull(reader, chunkCRC)
 		if err != nil {
 			return err
 		}
