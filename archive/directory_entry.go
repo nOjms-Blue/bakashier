@@ -22,5 +22,5 @@ type DirectoryEntry struct {
 	ModTime  time.Time
 }
 
-// 1エントリの固定長ヘッダー: Type(1) + RealNameLen(4) + HideNameLen(4) + Size(8) + ModTime(8) = 25
-const dirEntryHeaderSize = 1 + 4 + 4 + 8 + 8
+// ファイル名の最大長
+const MAX_NAME_SIZE = 1024

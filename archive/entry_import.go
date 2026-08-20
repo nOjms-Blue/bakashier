@@ -2,6 +2,7 @@ package archive
 
 import (
 	"encoding/binary"
+	"errors"
 	"io"
 	"time"
 )
@@ -35,6 +36,9 @@ func ImportDirectoryEntries(reader io.Reader, writer func(entry DirectoryEntry) 
 			return err
 		}
 		realNameBytesLength := binary.BigEndian.Uint32(realNameBytesLengthBytes[:])
+		if realNameBytesLength > MAX_NAME_SIZE {
+			return errors.New("real name length is out of range")
+		}
 
 		// HideName のバイト長を取得
 		hideNameBytesLengthBytes := [4]byte{0, 0, 0, 0}
@@ -43,6 +47,9 @@ func ImportDirectoryEntries(reader io.Reader, writer func(entry DirectoryEntry) 
 			return err
 		}
 		hideNameBytesLength := binary.BigEndian.Uint32(hideNameBytesLengthBytes[:])
+		if hideNameBytesLength > MAX_NAME_SIZE {
+			return errors.New("hide name length is out of range")
+		}
 
 		// RealName のバイト列を取得
 		realNameBytes := make([]byte, realNameBytesLength)

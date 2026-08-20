@@ -3,6 +3,7 @@ package archive
 import (
 	"bakashier/utils"
 	"encoding/binary"
+	"errors"
 	"io"
 )
 
@@ -29,6 +30,9 @@ func exportProcess(chunk []byte, password string) ([]byte, []byte, error) {
 func (bks BksArchive) Export(name string, reader io.Reader, writer io.Writer) error {
 	chunkSize := bks.ChunkSize
 	password := bks.Password
+	if chunkSize <= 0 || chunkSize > MAX_CHUNK_SIZE {
+		return errors.New("chunk size is out of range")
+	}
 
 	// ヘッダの bakashier 形式判定用の "BKS"
 	_, err := writer.Write([]byte("BKS"))

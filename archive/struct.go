@@ -7,7 +7,7 @@ import (
 
 type BksArchive struct {
 	Password  string
-	ChunkSize int64
+	ChunkSize uint64
 }
 
 // デフォルトのチャンクサイズ
