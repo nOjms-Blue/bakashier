@@ -71,6 +71,10 @@ func exportArchiveFile(srcFile string, dstFile string, fileName string, password
 }
 
 func importArchiveFile(archiveFile string, dstDirectory string, password string) (string, error) {
+	return importArchiveFileWithExpectedName(archiveFile, dstDirectory, password, "")
+}
+
+func importArchiveFileWithExpectedName(archiveFile string, dstDirectory string, password string, expectedName string) (string, error) {
 	src, err := os.Open(archiveFile)
 	if err != nil {
 		return "", err
@@ -87,6 +91,9 @@ func importArchiveFile(archiveFile string, dstDirectory string, password string)
 	err = bks.Import(src, func(name string) (io.Writer, error) {
 		if !archive.IsSafeFileName(name) {
 			return nil, fmt.Errorf("unsafe file name in archive: %q", name)
+		}
+		if expectedName != "" && name != expectedName {
+			return nil, fmt.Errorf("archive file name mismatch: got %q, want %q", name, expectedName)
 		}
 		dstFile = filepath.Join(dstDirectory, name)
 		var createErr error

@@ -204,6 +204,30 @@ func TestImportArchiveFileRejectsUnsafeFileName(t *testing.T) {
 	}
 }
 
+func TestImportArchiveFileRejectsUnexpectedFileName(t *testing.T) {
+	tmp := t.TempDir()
+	srcFile := filepath.Join(tmp, "source.txt")
+	archiveFile := filepath.Join(tmp, "archive.bks")
+	restoreDir := filepath.Join(tmp, "restore")
+	if err := os.WriteFile(srcFile, []byte("content"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := exportArchiveFile(srcFile, archiveFile, "other.txt", testPassword, 1024); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(restoreDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+
+	_, err := importArchiveFileWithExpectedName(archiveFile, restoreDir, testPassword, "expected.txt")
+	if err == nil || !strings.Contains(err.Error(), "file name mismatch") {
+		t.Fatalf("expected file name mismatch error, got: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(restoreDir, "other.txt")); !os.IsNotExist(err) {
+		t.Fatalf("unexpected archive name was written: %v", err)
+	}
+}
+
 func TestExportArchiveFileFailurePreservesExistingDestination(t *testing.T) {
 	tmp := t.TempDir()
 	srcFile := filepath.Join(tmp, "source.txt")

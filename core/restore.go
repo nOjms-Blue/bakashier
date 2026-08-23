@@ -273,7 +273,7 @@ func restoreWorker(workerId uint, password string, toManagerQueue chan<- message
 					}
 
 					func() {
-						realFile, err := importArchiveFile(archiveFile, queue.DistDir, password)
+						realFile, err := importArchiveFileWithExpectedName(archiveFile, queue.DistDir, password, entry.RealName)
 						if err != nil {
 							errHandler("Failed to import stream archive", err)
 							return
