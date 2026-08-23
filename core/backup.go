@@ -306,6 +306,14 @@ func backupWorker(workerId uint, password string, toManagerQueue chan<- messageF
 				}
 				nameMap[hideName] = file.Name()
 
+				if file.Type()&os.ModeSymlink != 0 {
+					errHandler("Unsupported symbolic link in source", fmt.Errorf("%q", filepath.Join(queue.SrcDir, file.Name())))
+					if entry.Type == archive.File || entry.Type == archive.Directory {
+						newEntries[hideName] = entry
+					}
+					continue
+				}
+
 				if file.IsDir() {
 					// ディレクトリエントリを追加
 					newEntries[hideName] = archive.DirectoryEntry{

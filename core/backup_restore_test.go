@@ -511,3 +511,33 @@ func TestFailedMetadataSavePreservesFilesPendingDeletion(t *testing.T) {
 		t.Fatalf("restored content = %q, want previous version", got)
 	}
 }
+
+func TestBackupRejectsSourceFileSymlinks(t *testing.T) {
+	tmp := t.TempDir()
+	srcDir := filepath.Join(tmp, "src")
+	backupDir := filepath.Join(tmp, "backup")
+	outsideFile := filepath.Join(tmp, "outside-secret.txt")
+	if err := os.MkdirAll(srcDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(outsideFile, []byte("secret outside source"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(outsideFile, filepath.Join(srcDir, "secret-link.txt")); err != nil {
+		t.Skipf("symlink creation is unavailable: %v", err)
+	}
+	settings := Settings{
+		SrcDir:    srcDir,
+		DistDir:   backupDir,
+		Password:  "test-password",
+		Workers:   1,
+		ChunkSize: 1024,
+	}
+
+	errors := runWithDrainedView(t, func(toView chan<- view.MessageToView, fromView <-chan view.MessageToManager) {
+		_ = Backup(settings, toView, fromView)
+	})
+	if len(errors) == 0 {
+		t.Fatal("expected source symlink to be rejected")
+	}
+}
