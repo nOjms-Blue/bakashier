@@ -152,6 +152,52 @@ func TestBksArchiveOversizedChunkLength(t *testing.T) {
 	}
 }
 
+func TestBksArchiveRejectsOversizedDecompressedName(t *testing.T) {
+	bks := BksArchive{
+		Password:  testPassword,
+		ChunkSize: 1024,
+	}
+	name := strings.Repeat("a", int(maxEncryptedNameSize)+1)
+
+	var archived bytes.Buffer
+	if err := bks.Export(name, bytes.NewReader(nil), &archived); err != nil {
+		t.Fatal(err)
+	}
+	called := false
+	err := bks.Import(bytes.NewReader(archived.Bytes()), func(name string) (io.Writer, error) {
+		called = true
+		return io.Discard, nil
+	})
+	if err == nil {
+		t.Fatal("expected oversized decompressed name to be rejected")
+	}
+	if called {
+		t.Fatal("getWriter was called with an oversized name")
+	}
+}
+
+func TestBksArchiveTruncatedMaximumLengthDoesNotPreallocateClaimedSize(t *testing.T) {
+	bks := BksArchive{
+		Password:  testPassword,
+		ChunkSize: 1024,
+	}
+	var archived bytes.Buffer
+	if err := bks.Export("source.bin", bytes.NewReader([]byte("data")), &archived); err != nil {
+		t.Fatal(err)
+	}
+	tampered := append([]byte{}, archived.Bytes()...)
+	nameLen := binary.BigEndian.Uint32(tampered[5:9])
+	chunkLenOffset := 9 + int(nameLen) + 4
+	binary.BigEndian.PutUint64(tampered[chunkLenOffset:chunkLenOffset+8], maxEncryptedChunkSize)
+
+	err := bks.Import(bytes.NewReader(tampered), func(name string) (io.Writer, error) {
+		return io.Discard, nil
+	})
+	if err == nil || !strings.Contains(err.Error(), "truncated block") {
+		t.Fatalf("expected truncated block error, got: %v", err)
+	}
+}
+
 func TestBksArchiveImportAllowsPathName(t *testing.T) {
 	bks := BksArchive{
 		Password:  testPassword,
