@@ -133,12 +133,11 @@ func saveDirectoryEntries(directoryEntryFile string, name string, entries []arch
 
 // _directory_.bks からエントリ一覧を読み込む。ファイルが存在しない場合は空スライスを返す。復号に password を使用する。
 func loadDirectoryEntries(directoryEntryFile string, password string) ([]archive.DirectoryEntry, error) {
-	if _, err := os.Stat(directoryEntryFile); err != nil {
-		return []archive.DirectoryEntry{}, nil
-	}
-
 	src, err := os.Open(directoryEntryFile)
 	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return []archive.DirectoryEntry{}, nil
+		}
 		return []archive.DirectoryEntry{}, err
 	}
 	defer src.Close()

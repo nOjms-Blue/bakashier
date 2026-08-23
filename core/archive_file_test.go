@@ -395,3 +395,16 @@ func TestLoadDirectoryEntriesMissingFile(t *testing.T) {
 		t.Fatalf("expected empty entries, got %d", len(entries))
 	}
 }
+
+func TestLoadDirectoryEntriesPropagatesNonExistenceRelatedStatErrors(t *testing.T) {
+	tmp := t.TempDir()
+	notDirectory := filepath.Join(tmp, "not-a-directory")
+	if err := os.WriteFile(notDirectory, []byte("file"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	entries, err := loadDirectoryEntries(filepath.Join(notDirectory, "_directory_.bks"), testPassword)
+	if err == nil {
+		t.Fatalf("expected ENOTDIR to be returned, got entries: %+v", entries)
+	}
+}

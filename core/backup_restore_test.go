@@ -109,3 +109,91 @@ func TestBackupRestoreRoundtrip(t *testing.T) {
 		t.Errorf("restored empty directory missing: %v", err)
 	}
 }
+
+func TestBackupRejectsNonEmptyUninitializedDestination(t *testing.T) {
+	tmp := t.TempDir()
+	srcDir := filepath.Join(tmp, "src")
+	backupDir := filepath.Join(tmp, "backup")
+	unrelatedFile := filepath.Join(backupDir, "unrelated.txt")
+
+	if err := os.MkdirAll(srcDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(srcDir, "source.txt"), []byte("source"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(backupDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(unrelatedFile, []byte("must remain"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	settings := Settings{
+		SrcDir:    srcDir,
+		DistDir:   backupDir,
+		Password:  "test-password",
+		Workers:   1,
+		ChunkSize: 1024,
+	}
+	errors := runWithDrainedView(t, func(toView chan<- view.MessageToView, fromView <-chan view.MessageToManager) {
+		Backup(settings, toView, fromView)
+	})
+
+	if len(errors) == 0 {
+		t.Fatal("expected backup to reject a non-empty uninitialized destination")
+	}
+	got, err := os.ReadFile(unrelatedFile)
+	if err != nil {
+		t.Fatalf("unrelated destination file was removed: %v", err)
+	}
+	if string(got) != "must remain" {
+		t.Fatalf("unrelated destination file changed: got %q", got)
+	}
+}
+
+func TestBackupPreservesDestinationWhenMetadataCannotBeInspected(t *testing.T) {
+	tmp := t.TempDir()
+	srcDir := filepath.Join(tmp, "src")
+	backupDir := filepath.Join(tmp, "backup")
+	metadataFile := filepath.Join(backupDir, "_directory_.bks")
+	unrelatedFile := filepath.Join(backupDir, "unrelated.txt")
+
+	if err := os.MkdirAll(srcDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(backupDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(unrelatedFile, []byte("must remain"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink("_directory_.bks", metadataFile); err != nil {
+		t.Skipf("symlink creation is unavailable: %v", err)
+	}
+
+	settings := Settings{
+		SrcDir:    srcDir,
+		DistDir:   backupDir,
+		Password:  "test-password",
+		Workers:   1,
+		ChunkSize: 1024,
+	}
+	errors := runWithDrainedView(t, func(toView chan<- view.MessageToView, fromView <-chan view.MessageToManager) {
+		Backup(settings, toView, fromView)
+	})
+
+	if len(errors) == 0 {
+		t.Fatal("expected backup to report an unreadable metadata file")
+	}
+	if _, err := os.Lstat(metadataFile); err != nil {
+		t.Fatalf("metadata symlink was removed: %v", err)
+	}
+	got, err := os.ReadFile(unrelatedFile)
+	if err != nil {
+		t.Fatalf("unrelated destination file was removed: %v", err)
+	}
+	if string(got) != "must remain" {
+		t.Fatalf("unrelated destination file changed: got %q", got)
+	}
+}

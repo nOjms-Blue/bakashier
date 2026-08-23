@@ -1,6 +1,7 @@
 package core
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -212,17 +213,21 @@ func backupWorker(workerId uint, password string, toManagerQueue chan<- messageF
 			newEntries := make(map[string]archive.DirectoryEntry) // [HideName]DirectoryEntry
 			directoryEntryFile := filepath.Join(queue.DistDir, "_directory_.bks")
 
-			// 既存の _directory_.bks が存在しない場合は、中断されたバックアップを削除する。
+			// メタデータのない既存ディレクトリを自動削除すると無関係なデータを失うため、
+			// 初回バックアップでは空の出力先だけを受け入れる。
 			if _, err := os.Stat(directoryEntryFile); err != nil {
+				if !errors.Is(err, os.ErrNotExist) {
+					errHandler("Failed to inspect directory entries", err)
+					return
+				}
 				items, err := os.ReadDir(queue.DistDir)
-				if err == nil {
-					for _, item := range items {
-						if item.IsDir() {
-							os.RemoveAll(filepath.Join(queue.DistDir, item.Name()))
-						} else {
-							os.Remove(filepath.Join(queue.DistDir, item.Name()))
-						}
-					}
+				if err != nil {
+					errHandler("Failed to inspect backup destination", err)
+					return
+				}
+				if len(items) != 0 {
+					errHandler("Unsafe backup destination", errors.New("destination is not empty and contains no readable _directory_.bks"))
+					return
 				}
 			}
 
