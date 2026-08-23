@@ -94,3 +94,19 @@ func TestParseArgsRejectsExcessiveWorkerCount(t *testing.T) {
 		t.Fatal("expected excessive worker count to be rejected")
 	}
 }
+
+func TestParseArgsRejectsExcessiveConcurrentChunkMemory(t *testing.T) {
+	tmp := t.TempDir()
+	_, err := ParseArgs([]string{
+		"--backup",
+		filepath.Join(tmp, "source"),
+		filepath.Join(tmp, "destination"),
+		"--workers",
+		"1",
+		"--chunk",
+		"8192",
+	})
+	if err == nil {
+		t.Fatal("expected excessive concurrent chunk memory to be rejected")
+	}
+}

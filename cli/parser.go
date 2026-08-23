@@ -15,6 +15,7 @@ import (
 )
 
 const maxWorkers uint64 = 64
+const maxConcurrentChunkBytes uint64 = 512 * 1024 * 1024
 
 // 親ディレクトリが子ディレクトリのサブパスになっているかを判定する。
 func isSubPath(parent string, child string) bool {
@@ -216,21 +217,33 @@ func ParseArgs(args []string) (ParsedArgs, error) {
 		}
 	}
 
-	// ワーカー数を設定する。
-	if workers == 0 {
-		defaultWorkers := uint64(runtime.GOMAXPROCS(0))
-		if defaultWorkers > maxWorkers {
-			defaultWorkers = maxWorkers
-		}
-		workers = uint32(defaultWorkers)
-	}
-
 	// チャンクサイズを設定する。
 	chunkSize := archive.DEFAULT_CHUNK_SIZE
 	if chunkSizeMiB > 0 {
 		chunkSize = chunkSizeMiB * 1024 * 1024
 	} else {
 		chunkSize = archive.DEFAULT_CHUNK_SIZE
+	}
+
+	// ワーカー数を設定し、バックアップ時の同時チャンクバッファ総量を制限する。
+	allowedWorkers := maxWorkers
+	if mode == ModeBackup {
+		allowedWorkersByMemory := maxConcurrentChunkBytes / chunkSize
+		if allowedWorkersByMemory == 0 {
+			return ParsedArgs{}, fmt.Errorf("chunk size exceeds the concurrent memory limit")
+		}
+		if allowedWorkersByMemory < allowedWorkers {
+			allowedWorkers = allowedWorkersByMemory
+		}
+	}
+	if workers == 0 {
+		defaultWorkers := uint64(runtime.GOMAXPROCS(0))
+		if defaultWorkers > allowedWorkers {
+			defaultWorkers = allowedWorkers
+		}
+		workers = uint32(defaultWorkers)
+	} else if uint64(workers) > allowedWorkers {
+		return ParsedArgs{}, fmt.Errorf("workers and chunk size require too much concurrent memory (maximum workers: %d)", allowedWorkers)
 	}
 
 	// 解析結果を返す。
