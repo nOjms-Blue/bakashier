@@ -455,3 +455,59 @@ func TestBackupRejectsUnsafeNamesInDirectoryMetadata(t *testing.T) {
 		t.Fatalf("outside file changed: got %q", got)
 	}
 }
+
+func TestFailedMetadataSavePreservesFilesPendingDeletion(t *testing.T) {
+	tmp := t.TempDir()
+	srcDir := filepath.Join(tmp, "src")
+	backupDir := filepath.Join(tmp, "backup")
+	restoreDir := filepath.Join(tmp, "restore")
+	srcFile := filepath.Join(srcDir, "source.txt")
+	if err := os.MkdirAll(srcDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(srcFile, []byte("previous version"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	settings := Settings{
+		SrcDir:    srcDir,
+		DistDir:   backupDir,
+		Password:  "test-password",
+		Workers:   1,
+		ChunkSize: 1024,
+	}
+	errors := runWithDrainedView(t, func(toView chan<- view.MessageToView, fromView <-chan view.MessageToManager) {
+		_ = Backup(settings, toView, fromView)
+	})
+	if len(errors) != 0 {
+		t.Fatalf("initial backup reported errors: %v", errors)
+	}
+	if err := os.Remove(srcFile); err != nil {
+		t.Fatal(err)
+	}
+
+	settings.ChunkSize = 0
+	errors = runWithDrainedView(t, func(toView chan<- view.MessageToView, fromView <-chan view.MessageToManager) {
+		_ = Backup(settings, toView, fromView)
+	})
+	if len(errors) == 0 {
+		t.Fatal("expected metadata save failure for invalid chunk size")
+	}
+
+	restoreSettings := settings
+	restoreSettings.SrcDir = backupDir
+	restoreSettings.DistDir = restoreDir
+	restoreSettings.ChunkSize = 1024
+	errors = runWithDrainedView(t, func(toView chan<- view.MessageToView, fromView <-chan view.MessageToManager) {
+		_ = Restore(restoreSettings, toView, fromView)
+	})
+	if len(errors) != 0 {
+		t.Fatalf("restore of previous backup reported errors: %v", errors)
+	}
+	got, err := os.ReadFile(filepath.Join(restoreDir, "source.txt"))
+	if err != nil {
+		t.Fatalf("previous file version could not be restored: %v", err)
+	}
+	if string(got) != "previous version" {
+		t.Fatalf("restored content = %q, want previous version", got)
+	}
+}

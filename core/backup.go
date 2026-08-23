@@ -417,21 +417,47 @@ func backupWorker(workerId uint, password string, toManagerQueue chan<- messageF
 				}
 			}
 
-			// 既存のエントリから削除されたファイルを削除する。
+			// 削除対象を反映したメタデータを先に原子的に保存する。
+			// 保存に失敗した場合は、旧メタデータが参照するアーカイブを残す。
 			if isExistEntries {
 				for _, entry := range entries {
 					if _, ok := newEntries[entry.HideName]; !ok {
 						isExistChanges = true
-						if entry.Type == archive.File {
-							os.Remove(filepath.Join(queue.DistDir, fmt.Sprintf("%s.bks", entry.HideName)))
-						} else {
-							os.RemoveAll(filepath.Join(queue.DistDir, entry.HideName))
-						}
 					}
 				}
 			}
 
-			// エントリに存在しないバックアップファイルを削除
+			if isExistChanges {
+				updatedEntries := make([]archive.DirectoryEntry, 0, len(newEntries))
+				for _, entry := range newEntries {
+					updatedEntries = append(updatedEntries, entry)
+				}
+				err = saveDirectoryEntries(directoryEntryFile, queue.SrcDir, updatedEntries, password, chunkSize)
+				if err != nil {
+					errHandler("Failed to export directory entries archive", err)
+					return
+				}
+			}
+
+			// メタデータ保存後に、既存エントリから削除されたアーカイブを削除する。
+			if isExistEntries {
+				for _, entry := range entries {
+					if _, ok := newEntries[entry.HideName]; ok {
+						continue
+					}
+					var removeErr error
+					if entry.Type == archive.File {
+						removeErr = os.Remove(filepath.Join(queue.DistDir, fmt.Sprintf("%s.bks", entry.HideName)))
+					} else {
+						removeErr = os.RemoveAll(filepath.Join(queue.DistDir, entry.HideName))
+					}
+					if removeErr != nil && !errors.Is(removeErr, os.ErrNotExist) {
+						errHandler("Failed to remove obsolete backup entry", removeErr)
+					}
+				}
+			}
+
+			// エントリに存在しないバックアップファイルを削除する。
 			dstFiles, err := os.ReadDir(queue.DistDir)
 			if err != nil {
 				errHandler("Failed to read backup directory", err)
@@ -462,24 +488,15 @@ func backupWorker(workerId uint, password string, toManagerQueue chan<- messageF
 				}
 
 				if !isExist {
+					var removeErr error
 					if dstFile.IsDir() {
-						os.RemoveAll(filepath.Join(queue.DistDir, dstFile.Name()))
+						removeErr = os.RemoveAll(filepath.Join(queue.DistDir, dstFile.Name()))
 					} else {
-						os.Remove(filepath.Join(queue.DistDir, dstFile.Name()))
+						removeErr = os.Remove(filepath.Join(queue.DistDir, dstFile.Name()))
 					}
-				}
-			}
-
-			// ディレクトリエントリを保存
-			if isExistChanges {
-				entries = make([]archive.DirectoryEntry, 0, len(newEntries))
-				for _, entry := range newEntries {
-					entries = append(entries, entry)
-				}
-				err = saveDirectoryEntries(directoryEntryFile, queue.SrcDir, entries, password, chunkSize)
-				if err != nil {
-					errHandler("Failed to export directory entries archive", err)
-					return
+					if removeErr != nil && !errors.Is(removeErr, os.ErrNotExist) {
+						errHandler("Failed to remove orphaned backup entry", removeErr)
+					}
 				}
 			}
 		}()
