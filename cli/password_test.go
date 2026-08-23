@@ -21,3 +21,9 @@ func TestPasswordResultReturnsEnteredPassword(t *testing.T) {
 		t.Fatalf("password = %q, want %q", got, "password")
 	}
 }
+
+func TestAsPasswordModelRejectsUnexpectedType(t *testing.T) {
+	if _, err := asPasswordModel(nil); err == nil {
+		t.Fatal("expected unexpected model type error")
+	}
+}

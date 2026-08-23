@@ -14,3 +14,9 @@ func TestModelBoundsStoredErrorLogs(t *testing.T) {
 		t.Fatalf("stored error logs = %d, want at most %d plus omission marker", len(m.ErrorLog), maxStoredErrorLogs)
 	}
 }
+
+func TestAsViewModelRejectsUnexpectedType(t *testing.T) {
+	if _, err := asViewModel(nil); err == nil {
+		t.Fatal("expected unexpected model type error")
+	}
+}

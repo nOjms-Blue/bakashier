@@ -79,6 +79,14 @@ func passwordResult(pm passwordModel) (string, error) {
 	return pm.value, nil
 }
 
+func asPasswordModel(finalModel tea.Model) (passwordModel, error) {
+	pm, ok := finalModel.(passwordModel)
+	if !ok {
+		return passwordModel{}, fmt.Errorf("unexpected password model type %T", finalModel)
+	}
+	return pm, nil
+}
+
 // InputPassword は Bubble Tea を起動してパスワードを入力させ、確定した文字列を返します。
 // キャンセル時は ErrCanceled を返します。
 func InputPassword() (string, error) {
@@ -90,6 +98,9 @@ func InputPassword() (string, error) {
 		return "", err
 	}
 
-	pm := finalModel.(passwordModel)
+	pm, err := asPasswordModel(finalModel)
+	if err != nil {
+		return "", err
+	}
 	return passwordResult(pm)
 }
