@@ -1,9 +1,12 @@
 package cli
 
 import (
+	"math"
 	"os"
 	"path/filepath"
+	"strconv"
 	"testing"
+	"time"
 )
 
 func TestIsParentChildDirectoryResolvesSymlinkDestination(t *testing.T) {
@@ -45,5 +48,35 @@ func TestIsParentChildDirectoryResolvesExistingSymlinkAncestor(t *testing.T) {
 	}
 	if !invalid {
 		t.Fatal("destination below a symlinked ancestor inside source was not detected")
+	}
+}
+
+func TestParseArgsRejectsLimitSizeOverflow(t *testing.T) {
+	tmp := t.TempDir()
+	tooLargeMiB := uint64(math.MaxUint64/(1024*1024) + 1)
+	_, err := ParseArgs([]string{
+		"--backup",
+		filepath.Join(tmp, "source"),
+		filepath.Join(tmp, "destination"),
+		"--limit-size",
+		strconv.FormatUint(tooLargeMiB, 10),
+	})
+	if err == nil {
+		t.Fatal("expected limit size overflow to be rejected")
+	}
+}
+
+func TestParseArgsRejectsLimitWaitDurationOverflow(t *testing.T) {
+	tmp := t.TempDir()
+	tooLargeSeconds := uint64(math.MaxInt64/int64(time.Second)) + 1
+	_, err := ParseArgs([]string{
+		"--backup",
+		filepath.Join(tmp, "source"),
+		filepath.Join(tmp, "destination"),
+		"--limit-wait",
+		strconv.FormatUint(tooLargeSeconds, 10),
+	})
+	if err == nil {
+		t.Fatal("expected limit wait duration overflow to be rejected")
 	}
 }

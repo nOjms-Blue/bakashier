@@ -3,11 +3,13 @@ package cli
 import (
 	"errors"
 	"fmt"
+	"math"
 	"os"
 	"path/filepath"
 	"runtime"
 	"strconv"
 	"strings"
+	"time"
 
 	"bakashier/archive"
 )
@@ -149,6 +151,9 @@ func ParseArgs(args []string) (ParsedArgs, error) {
 			if err != nil || parsed == 0 {
 				return ParsedArgs{}, fmt.Errorf("limit size must be a positive integer (MiB)")
 			}
+			if parsed > math.MaxUint64/(1024*1024) {
+				return ParsedArgs{}, fmt.Errorf("limit size is too large")
+			}
 			limitSizeMiB = parsed * 1024 * 1024
 			i++
 		case "--limit-wait", "-lw":
@@ -162,6 +167,9 @@ func ParseArgs(args []string) (ParsedArgs, error) {
 			parsed, err := strconv.ParseUint(limitWaitArg, 10, 64)
 			if err != nil || parsed == 0 {
 				return ParsedArgs{}, fmt.Errorf("limit wait must be a positive integer (seconds)")
+			}
+			if parsed > uint64(math.MaxInt64/int64(time.Second)) {
+				return ParsedArgs{}, fmt.Errorf("limit wait is too large")
 			}
 			limitWaitSec = parsed
 			i++
