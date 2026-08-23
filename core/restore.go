@@ -211,7 +211,7 @@ func restoreWorker(workerId uint, password string, toManagerQueue chan<- message
 				return
 			}
 
-			err := os.MkdirAll(queue.DistDir, 0755)
+			err = os.MkdirAll(queue.DistDir, 0755)
 			if err != nil {
 				errHandler("Failed to create directory", err)
 				return
