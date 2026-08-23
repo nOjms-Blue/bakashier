@@ -201,6 +201,16 @@ func restoreWorker(workerId uint, password string, toManagerQueue chan<- message
 		}
 
 		func() {
+			sourceInfo, err := os.Stat(queue.SrcDir)
+			if err != nil {
+				errHandler("Failed to inspect backup directory", err)
+				return
+			}
+			if !sourceInfo.IsDir() {
+				errHandler("Invalid backup directory", fmt.Errorf("%q is not a directory", queue.SrcDir))
+				return
+			}
+
 			err := os.MkdirAll(queue.DistDir, 0755)
 			if err != nil {
 				errHandler("Failed to create directory", err)
