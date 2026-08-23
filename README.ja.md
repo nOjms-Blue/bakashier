@@ -17,7 +17,7 @@
 ### コマンド形式
 
 ```bash
-bakashier [--backup|-b|--restore|-r] [src_dir] [dist_dir] --password|-p [password]
+bakashier [--backup|-b|--restore|-r] [src_dir] [dist_dir]
 bakashier [--help|-h|--version|-v]
 ```
 
@@ -25,7 +25,6 @@ bakashier [--help|-h|--version|-v]
 
 - `--backup`, `-b`: バックアップを実行
 - `--restore`, `-r`: リストアを実行
-- `--password`, `-p`: パスワード（必須）
 - `--chunk`, `-c`: バックアップ時のチャンクサイズ（MiB、デフォルト: 16）
 - `--limit-size`, `-ls`: バックアップ時のサイズ制限（MiB、デフォルト: 0 = 無効）
 - `--limit-wait`, `-lw`: バックアップ時の待機時間制限（秒、デフォルト: 0 = 無効）
@@ -37,17 +36,17 @@ bakashier [--help|-h|--version|-v]
 - `--backup` と `--restore` は同時指定できません。
 - `src_dir` と `dist_dir` は必須です。
 - `src_dir` と `dist_dir` は親子ディレクトリ関係にできません。
-- `--password` は必須です（省略不可）。
+- パスワードは安全な対話プロンプトから入力します。コマンドライン引数では受け付けません。
 - `--chunk`、`--limit-size`、`--limit-wait` は正の整数を指定してください。
 
 ### 実行例
 
 ```bash
 # バックアップ
-bakashier --backup ./src ./dist --password my-secret
+bakashier --backup ./src ./dist
 
 # リストア
-bakashier --restore ./dist ./restore --password my-secret
+bakashier --restore ./dist ./restore
 
 # バージョン表示
 bakashier --version

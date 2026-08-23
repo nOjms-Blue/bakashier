@@ -17,7 +17,7 @@ Backup data is stored in `.bks`, a bakashier-specific custom format, and protect
 ### Command format
 
 ```bash
-bakashier [--backup|-b|--restore|-r] [src_dir] [dist_dir] --password|-p [password]
+bakashier [--backup|-b|--restore|-r] [src_dir] [dist_dir]
 bakashier [--help|-h|--version|-v]
 ```
 
@@ -25,7 +25,6 @@ bakashier [--help|-h|--version|-v]
 
 - `--backup`, `-b`: Run backup
 - `--restore`, `-r`: Run restore
-- `--password`, `-p`: Password (required)
 - `--chunk`, `-c`: Chunk size in MiB for backup (default: 16)
 - `--limit-size`, `-ls`: Limit size in MiB for backup (default: 0 = disabled)
 - `--limit-wait`, `-lw`: Limit wait in seconds for backup (default: 0 = disabled)
@@ -37,17 +36,17 @@ bakashier [--help|-h|--version|-v]
 - `--backup` and `--restore` are mutually exclusive.
 - Both `src_dir` and `dist_dir` are required.
 - `src_dir` and `dist_dir` cannot be parent-child directories.
-- `--password` is required.
+- The password is entered securely at the interactive prompt and is never accepted as a command-line argument.
 - `--chunk`, `--limit-size`, and `--limit-wait` require positive integers.
 
 ### Examples
 
 ```bash
 # Backup
-bakashier --backup ./src ./dist --password my-secret
+bakashier --backup ./src ./dist
 
 # Restore
-bakashier --restore ./dist ./restore --password my-secret
+bakashier --restore ./dist ./restore
 
 # Show version
 bakashier --version

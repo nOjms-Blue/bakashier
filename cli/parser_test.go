@@ -110,3 +110,17 @@ func TestParseArgsRejectsExcessiveConcurrentChunkMemory(t *testing.T) {
 		t.Fatal("expected excessive concurrent chunk memory to be rejected")
 	}
 }
+
+func TestParseArgsRejectsCommandLinePassword(t *testing.T) {
+	tmp := t.TempDir()
+	_, err := ParseArgs([]string{
+		"--backup",
+		filepath.Join(tmp, "source"),
+		filepath.Join(tmp, "destination"),
+		"--password",
+		"secret",
+	})
+	if err == nil {
+		t.Fatal("expected command-line password to be rejected")
+	}
+}
