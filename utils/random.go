@@ -1,12 +1,19 @@
 package utils
 
-import "crypto/rand"
+import (
+	"crypto/rand"
+	"io"
+)
 
 const filenameChars = "abcdefghijklmnopqrstuvwxyz0123456789"
 
 // existing に存在しない、英小文字と数字のみのランダムな文字列を返す。
 // 重複する場合は再生成を繰り返す。暗号論的乱数を使用する。
-func GenerateUniqueRandomName(existing map[string]string) string {
+func GenerateUniqueRandomName(existing map[string]string) (string, error) {
+	return generateUniqueRandomName(existing, rand.Reader)
+}
+
+func generateUniqueRandomName(existing map[string]string, random io.Reader) (string, error) {
 	const nameLen = 16
 	const maxByte = 256 - (256 % len(filenameChars)) // 偏りなく選ぶための上限
 	for {
@@ -14,8 +21,8 @@ func GenerateUniqueRandomName(existing map[string]string) string {
 		for i := range name {
 			for {
 				b := make([]byte, 1)
-				if _, err := rand.Read(b); err != nil {
-					continue
+				if _, err := io.ReadFull(random, b); err != nil {
+					return "", err
 				}
 				if int(b[0]) < maxByte {
 					name[i] = filenameChars[int(b[0])%len(filenameChars)]
@@ -25,7 +32,7 @@ func GenerateUniqueRandomName(existing map[string]string) string {
 		}
 		s := string(name)
 		if _, exists := existing[s]; !exists {
-			return s
+			return s, nil
 		}
 	}
 }

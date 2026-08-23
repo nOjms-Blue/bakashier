@@ -251,7 +251,11 @@ func backupWorker(workerId uint, password string, toManagerQueue chan<- messageF
 			// バックアップの実行
 			isExistChanges := false
 			for _, file := range files {
-				hideName := utils.GenerateUniqueRandomName(nameMap)
+				hideName, err := utils.GenerateUniqueRandomName(nameMap)
+				if err != nil {
+					errHandler("Failed to generate archive name", err)
+					return
+				}
 				entry := archive.DirectoryEntry{Type: archive.Unknown}
 				for _, move := range moved {
 					if move.AfterRealName != file.Name() {
