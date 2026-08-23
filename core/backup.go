@@ -16,7 +16,8 @@ import (
 
 // キューからメッセージを受け取り、ワーカーにジョブを配分する。
 // FIND_DIR でジョブを投入し、全ジョブが FINISH_JOB で完了すると各ワーカーに EXIT を送る。
-func backupManager(workers uint32, fromWorkerQueue <-chan messageFromWorkerToManager, toWorkerQueue chan messageFromManagerToWorker, toViewQueue chan<- view.MessageToView, fromViewQueue <-chan view.MessageToManager, wg *sync.WaitGroup) {
+func backupManager(workers uint32, fromWorkerQueue <-chan messageFromWorkerToManager, toWorkerQueue chan messageFromManagerToWorker, toViewQueue chan<- view.MessageToView, fromViewQueue <-chan view.MessageToManager, result chan<- error, wg *sync.WaitGroup) {
+	errorCount := 0
 	defer wg.Done()
 	defer func() {
 		toViewQueue <- view.MessageToView{
@@ -24,6 +25,11 @@ func backupManager(workers uint32, fromWorkerQueue <-chan messageFromWorkerToMan
 			MsgType:  view.FINISHED,
 			WorkerId: 0,
 			Detail:   "",
+		}
+		if errorCount > 0 {
+			result <- fmt.Errorf("backup completed with %d error(s)", errorCount)
+		} else {
+			result <- nil
 		}
 	}()
 
@@ -57,6 +63,7 @@ func backupManager(workers uint32, fromWorkerQueue <-chan messageFromWorkerToMan
 			case FINISH_JOB:
 				untreated--
 			case ERROR:
+				errorCount++
 				toViewQueue <- view.MessageToView{
 					Source:   view.MANAGER,
 					MsgType:  view.ERROR,
@@ -493,7 +500,7 @@ func backupWorker(workerId uint, password string, toManagerQueue chan<- messageF
 
 // settings.SrcDir を暗号化・圧縮して settings.DistDir にバックアップする。
 // マネージャ1つと複数のワーカーを起動し、チャネルでジョブを分配する。
-func Backup(settings Settings, toViewQueue chan<- view.MessageToView, fromViewQueue <-chan view.MessageToManager) {
+func Backup(settings Settings, toViewQueue chan<- view.MessageToView, fromViewQueue <-chan view.MessageToManager) error {
 	var wg sync.WaitGroup
 
 	workers := settings.Workers
@@ -505,6 +512,7 @@ func Backup(settings Settings, toViewQueue chan<- view.MessageToView, fromViewQu
 
 	workerToManagerQueue := make(chan messageFromWorkerToManager, queueSize)
 	managerToWorkerQueue := make(chan messageFromManagerToWorker, queueSize)
+	result := make(chan error, 1)
 
 	workerToManagerQueue <- messageFromWorkerToManager{
 		MsgType: FIND_DIR,
@@ -514,7 +522,7 @@ func Backup(settings Settings, toViewQueue chan<- view.MessageToView, fromViewQu
 	}
 
 	wg.Add(int(workers) + 1)
-	go backupManager(workers, workerToManagerQueue, managerToWorkerQueue, toViewQueue, fromViewQueue, &wg)
+	go backupManager(workers, workerToManagerQueue, managerToWorkerQueue, toViewQueue, fromViewQueue, result, &wg)
 	for i := uint(0); i < uint(workers); i++ {
 		go backupWorker(i+1, settings.Password, workerToManagerQueue, managerToWorkerQueue, toViewQueue, &wg, settings.ChunkSize, settings.Limit)
 	}
@@ -522,4 +530,5 @@ func Backup(settings Settings, toViewQueue chan<- view.MessageToView, fromViewQu
 
 	close(workerToManagerQueue)
 	close(managerToWorkerQueue)
+	return <-result
 }

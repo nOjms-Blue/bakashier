@@ -13,7 +13,8 @@ import (
 
 // キューからメッセージを受け取り、ワーカーにジョブを配分する。
 // 全ジョブ完了後に各ワーカーに EXIT を送って終了する。
-func restoreManager(workers uint32, fromWorkerQueue <-chan messageFromWorkerToManager, toWorkerQueue chan messageFromManagerToWorker, toViewQueue chan<- view.MessageToView, fromViewQueue <-chan view.MessageToManager, wg *sync.WaitGroup) {
+func restoreManager(workers uint32, fromWorkerQueue <-chan messageFromWorkerToManager, toWorkerQueue chan messageFromManagerToWorker, toViewQueue chan<- view.MessageToView, fromViewQueue <-chan view.MessageToManager, result chan<- error, wg *sync.WaitGroup) {
+	errorCount := 0
 	defer wg.Done()
 	defer func() {
 		toViewQueue <- view.MessageToView{
@@ -21,6 +22,11 @@ func restoreManager(workers uint32, fromWorkerQueue <-chan messageFromWorkerToMa
 			MsgType:  view.FINISHED,
 			WorkerId: 0,
 			Detail:   "",
+		}
+		if errorCount > 0 {
+			result <- fmt.Errorf("restore completed with %d error(s)", errorCount)
+		} else {
+			result <- nil
 		}
 	}()
 
@@ -54,6 +60,7 @@ func restoreManager(workers uint32, fromWorkerQueue <-chan messageFromWorkerToMa
 			case FINISH_JOB:
 				untreated--
 			case ERROR:
+				errorCount++
 				toViewQueue <- view.MessageToView{
 					Source:   view.MANAGER,
 					MsgType:  view.ERROR,
@@ -303,7 +310,7 @@ func restoreWorker(workerId uint, password string, toManagerQueue chan<- message
 
 // srcDir（バックアップ先）から distDir へ復元する。
 // マネージャ1つと複数のワーカーを起動し、チャネルでジョブを分配する。
-func Restore(settings Settings, toViewQueue chan<- view.MessageToView, fromViewQueue <-chan view.MessageToManager) {
+func Restore(settings Settings, toViewQueue chan<- view.MessageToView, fromViewQueue <-chan view.MessageToManager) error {
 	var wg sync.WaitGroup
 
 	workers := settings.Workers
@@ -315,6 +322,7 @@ func Restore(settings Settings, toViewQueue chan<- view.MessageToView, fromViewQ
 
 	workerToManagerQueue := make(chan messageFromWorkerToManager, queueSize)
 	managerToWorkerQueue := make(chan messageFromManagerToWorker, queueSize)
+	result := make(chan error, 1)
 
 	workerToManagerQueue <- messageFromWorkerToManager{
 		MsgType: FIND_DIR,
@@ -324,7 +332,7 @@ func Restore(settings Settings, toViewQueue chan<- view.MessageToView, fromViewQ
 	}
 
 	wg.Add(int(workers) + 1)
-	go restoreManager(workers, workerToManagerQueue, managerToWorkerQueue, toViewQueue, fromViewQueue, &wg)
+	go restoreManager(workers, workerToManagerQueue, managerToWorkerQueue, toViewQueue, fromViewQueue, result, &wg)
 	for i := uint(0); i < uint(workers); i++ {
 		go restoreWorker(i+1, settings.Password, workerToManagerQueue, managerToWorkerQueue, toViewQueue, &wg, settings.Limit)
 	}
@@ -332,4 +340,5 @@ func Restore(settings Settings, toViewQueue chan<- view.MessageToView, fromViewQ
 
 	close(workerToManagerQueue)
 	close(managerToWorkerQueue)
+	return <-result
 }

@@ -257,3 +257,41 @@ func TestFailedIncrementalBackupPreservesPreviousFileVersion(t *testing.T) {
 		t.Fatalf("restored content = %q, want previous version", got)
 	}
 }
+
+func TestBackupReturnsWorkerErrors(t *testing.T) {
+	tmp := t.TempDir()
+	settings := Settings{
+		SrcDir:    filepath.Join(tmp, "missing-source"),
+		DistDir:   filepath.Join(tmp, "backup"),
+		Password:  "test-password",
+		Workers:   1,
+		ChunkSize: 1024,
+	}
+
+	var operationErr error
+	messages := runWithDrainedView(t, func(toView chan<- view.MessageToView, fromView <-chan view.MessageToManager) {
+		operationErr = Backup(settings, toView, fromView)
+	})
+	if operationErr == nil {
+		t.Fatalf("Backup returned nil despite worker errors: %v", messages)
+	}
+}
+
+func TestRestoreReturnsWorkerErrors(t *testing.T) {
+	tmp := t.TempDir()
+	settings := Settings{
+		SrcDir:    filepath.Join(tmp, "missing-backup"),
+		DistDir:   filepath.Join(tmp, "restore"),
+		Password:  "test-password",
+		Workers:   1,
+		ChunkSize: 1024,
+	}
+
+	var operationErr error
+	messages := runWithDrainedView(t, func(toView chan<- view.MessageToView, fromView <-chan view.MessageToManager) {
+		operationErr = Restore(settings, toView, fromView)
+	})
+	if operationErr == nil {
+		t.Fatalf("Restore returned nil despite worker errors: %v", messages)
+	}
+}
