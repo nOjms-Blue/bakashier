@@ -198,6 +198,30 @@ func TestBksArchiveTruncatedMaximumLengthDoesNotPreallocateClaimedSize(t *testin
 	}
 }
 
+func TestBksArchiveCRCFailureDoesNotWriteInvalidChunk(t *testing.T) {
+	bks := BksArchive{
+		Password:  testPassword,
+		ChunkSize: 1024,
+	}
+	var archived bytes.Buffer
+	if err := bks.Export("source.bin", bytes.NewReader([]byte("data")), &archived); err != nil {
+		t.Fatal(err)
+	}
+	tampered := append([]byte{}, archived.Bytes()...)
+	tampered[len(tampered)-1] ^= 0xff
+
+	var output bytes.Buffer
+	err := bks.Import(bytes.NewReader(tampered), func(name string) (io.Writer, error) {
+		return &output, nil
+	})
+	if err == nil {
+		t.Fatal("expected CRC error")
+	}
+	if output.Len() != 0 {
+		t.Fatalf("wrote %d bytes from a chunk that failed integrity validation", output.Len())
+	}
+}
+
 func TestBksArchiveImportAllowsPathName(t *testing.T) {
 	bks := BksArchive{
 		Password:  testPassword,

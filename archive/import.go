@@ -18,7 +18,7 @@ func importProcess(chunk []byte, hash []byte, password string, writer io.Writer,
 	}
 
 	hasher := crc32.NewIEEE()
-	if err := utils.DecompressBytesToWriter(chunk, io.MultiWriter(writer, hasher), maxSize); err != nil {
+	if err := utils.DecompressBytesToWriter(chunk, hasher, maxSize); err != nil {
 		return err
 	}
 
@@ -26,7 +26,9 @@ func importProcess(chunk []byte, hash []byte, password string, writer io.Writer,
 	if !bytes.Equal(hash, hasher.Sum(nil)) {
 		return errors.New("chunk CRC32 hash mismatch")
 	}
-	return nil
+
+	// 整合性確認が完了するまで呼び出し側の writer には書き込まない。
+	return utils.DecompressBytesToWriter(chunk, writer, maxSize)
 }
 
 func readArchiveBlock(reader io.Reader, length uint64) ([]byte, error) {
