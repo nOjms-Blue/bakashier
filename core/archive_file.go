@@ -11,6 +11,23 @@ import (
 	"bakashier/archive"
 )
 
+const maxDirectoryEntriesBytes = 64 * 1024 * 1024
+const maxDirectoryEntryCount = 1_000_000
+
+var errDirectoryEntriesTooLarge = errors.New("directory entries exceed size limit")
+
+type limitedBuffer struct {
+	buffer  bytes.Buffer
+	maxSize int
+}
+
+func (w *limitedBuffer) Write(p []byte) (int, error) {
+	if len(p) > w.maxSize-w.buffer.Len() {
+		return 0, errDirectoryEntriesTooLarge
+	}
+	return w.buffer.Write(p)
+}
+
 func writeFileAtomically(path string, write func(io.Writer) error) error {
 	tmp, err := os.CreateTemp(filepath.Dir(path), ".bakashier-*")
 	if err != nil {
@@ -108,7 +125,10 @@ func importArchiveFile(archiveFile string, dstDirectory string, password string)
 }
 
 func saveDirectoryEntries(directoryEntryFile string, name string, entries []archive.DirectoryEntry, password string, chunkSize uint64) error {
-	var buf bytes.Buffer
+	if len(entries) > maxDirectoryEntryCount {
+		return errDirectoryEntriesTooLarge
+	}
+	buf := limitedBuffer{maxSize: maxDirectoryEntriesBytes}
 	index := 0
 	err := archive.ExportDirectoryEntries(func(entry *archive.DirectoryEntry) error {
 		if index >= len(entries) {
@@ -127,7 +147,7 @@ func saveDirectoryEntries(directoryEntryFile string, name string, entries []arch
 		ChunkSize: chunkSize,
 	}
 	return writeFileAtomically(directoryEntryFile, func(dst io.Writer) error {
-		return bks.Export(name, bytes.NewReader(buf.Bytes()), dst)
+		return bks.Export(name, bytes.NewReader(buf.buffer.Bytes()), dst)
 	})
 }
 
@@ -142,7 +162,7 @@ func loadDirectoryEntries(directoryEntryFile string, password string) ([]archive
 	}
 	defer src.Close()
 
-	var buf bytes.Buffer
+	buf := limitedBuffer{maxSize: maxDirectoryEntriesBytes}
 	bks := archive.BksArchive{
 		ChunkSize: archive.DEFAULT_CHUNK_SIZE,
 		Password:  password,
@@ -155,7 +175,10 @@ func loadDirectoryEntries(directoryEntryFile string, password string) ([]archive
 	}
 
 	var entries []archive.DirectoryEntry
-	err = archive.ImportDirectoryEntries(bytes.NewReader(buf.Bytes()), func(entry archive.DirectoryEntry) error {
+	err = archive.ImportDirectoryEntries(bytes.NewReader(buf.buffer.Bytes()), func(entry archive.DirectoryEntry) error {
+		if len(entries) >= maxDirectoryEntryCount {
+			return errDirectoryEntriesTooLarge
+		}
 		if entry.Type != archive.File && entry.Type != archive.Directory {
 			return fmt.Errorf("invalid directory entry type: %q", entry.Type)
 		}

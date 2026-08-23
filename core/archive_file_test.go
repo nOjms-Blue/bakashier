@@ -3,6 +3,7 @@ package core
 import (
 	"bytes"
 	"encoding/binary"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -406,5 +407,18 @@ func TestLoadDirectoryEntriesPropagatesNonExistenceRelatedStatErrors(t *testing.
 	entries, err := loadDirectoryEntries(filepath.Join(notDirectory, "_directory_.bks"), testPassword)
 	if err == nil {
 		t.Fatalf("expected ENOTDIR to be returned, got entries: %+v", entries)
+	}
+}
+
+func TestLimitedBufferRejectsCumulativeSizeOverflow(t *testing.T) {
+	buf := limitedBuffer{maxSize: 8}
+	if _, err := buf.Write([]byte("123456")); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := buf.Write([]byte("789")); !errors.Is(err, errDirectoryEntriesTooLarge) {
+		t.Fatalf("error = %v, want %v", err, errDirectoryEntriesTooLarge)
+	}
+	if buf.buffer.Len() != 6 {
+		t.Fatalf("buffer length = %d, want 6", buf.buffer.Len())
 	}
 }
