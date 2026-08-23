@@ -253,7 +253,11 @@ func TestBksArchiveCRCFailureDoesNotWriteInvalidChunk(t *testing.T) {
 		t.Fatal(err)
 	}
 	tampered := append([]byte{}, archived.Bytes()...)
-	tampered[len(tampered)-1] ^= 0xff
+	nameLen := binary.BigEndian.Uint32(tampered[5:9])
+	chunkLenOffset := 9 + int(nameLen) + 4
+	chunkLen := binary.BigEndian.Uint64(tampered[chunkLenOffset : chunkLenOffset+8])
+	chunkCRCOffset := chunkLenOffset + 8 + int(chunkLen)
+	tampered[chunkCRCOffset+3] ^= 0xff
 
 	var output bytes.Buffer
 	err := bks.Import(bytes.NewReader(tampered), func(name string) (io.Writer, error) {
