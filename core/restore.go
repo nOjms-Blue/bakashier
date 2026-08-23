@@ -211,6 +211,10 @@ func restoreWorker(workerId uint, password string, toManagerQueue chan<- message
 				return
 			}
 
+			if err := rejectSymlinkPath(queue.DistDir); err != nil {
+				errHandler("Unsafe restore destination", err)
+				return
+			}
 			err = os.MkdirAll(queue.DistDir, 0755)
 			if err != nil {
 				errHandler("Failed to create directory", err)
@@ -237,6 +241,10 @@ func restoreWorker(workerId uint, password string, toManagerQueue chan<- message
 				case archive.Directory:
 					hiddenDir := filepath.Join(queue.SrcDir, entry.HideName)
 					realDir := filepath.Join(queue.DistDir, entry.RealName)
+					if err := rejectSymlinkPath(realDir); err != nil {
+						errHandler("Unsafe restore destination", err)
+						return
+					}
 					err = os.MkdirAll(realDir, 0755)
 					if err != nil {
 						errHandler("Failed to create directory", err)

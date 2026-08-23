@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"bakashier/archive"
 	"bakashier/view"
 )
 
@@ -293,5 +294,109 @@ func TestRestoreReturnsWorkerErrors(t *testing.T) {
 	})
 	if operationErr == nil {
 		t.Fatalf("Restore returned nil despite worker errors: %v", messages)
+	}
+}
+
+func TestBackupRejectsSymlinkedManagedDestination(t *testing.T) {
+	tmp := t.TempDir()
+	srcDir := filepath.Join(tmp, "src")
+	backupDir := filepath.Join(tmp, "backup")
+	outsideDir := filepath.Join(tmp, "outside")
+	if err := os.MkdirAll(filepath.Join(srcDir, "sub"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(srcDir, "sub", "file.txt"), []byte("content"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	settings := Settings{
+		SrcDir:    srcDir,
+		DistDir:   backupDir,
+		Password:  "test-password",
+		Workers:   1,
+		ChunkSize: 1024,
+	}
+	errors := runWithDrainedView(t, func(toView chan<- view.MessageToView, fromView <-chan view.MessageToManager) {
+		_ = Backup(settings, toView, fromView)
+	})
+	if len(errors) != 0 {
+		t.Fatalf("initial backup reported errors: %v", errors)
+	}
+
+	entries, err := loadDirectoryEntries(filepath.Join(backupDir, "_directory_.bks"), settings.Password)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var hiddenDir string
+	for _, entry := range entries {
+		if entry.Type != archive.Directory || entry.RealName != "sub" {
+			continue
+		}
+		hiddenDir = filepath.Join(backupDir, entry.HideName)
+		break
+	}
+	if hiddenDir == "" {
+		t.Fatal("backed-up subdirectory entry not found")
+	}
+	if err := os.Rename(hiddenDir, outsideDir); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(outsideDir, hiddenDir); err != nil {
+		t.Skipf("symlink creation is unavailable: %v", err)
+	}
+
+	errors = runWithDrainedView(t, func(toView chan<- view.MessageToView, fromView <-chan view.MessageToManager) {
+		_ = Backup(settings, toView, fromView)
+	})
+	if len(errors) == 0 {
+		t.Fatal("expected backup to reject a symlinked managed destination directory")
+	}
+}
+
+func TestRestoreRejectsSymlinkedDestinationDirectory(t *testing.T) {
+	tmp := t.TempDir()
+	srcDir := filepath.Join(tmp, "src")
+	backupDir := filepath.Join(tmp, "backup")
+	restoreDir := filepath.Join(tmp, "restore")
+	outsideDir := filepath.Join(tmp, "outside")
+	if err := os.MkdirAll(filepath.Join(srcDir, "sub"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(srcDir, "sub", "file.txt"), []byte("content"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	backupSettings := Settings{
+		SrcDir:    srcDir,
+		DistDir:   backupDir,
+		Password:  "test-password",
+		Workers:   1,
+		ChunkSize: 1024,
+	}
+	errors := runWithDrainedView(t, func(toView chan<- view.MessageToView, fromView <-chan view.MessageToManager) {
+		_ = Backup(backupSettings, toView, fromView)
+	})
+	if len(errors) != 0 {
+		t.Fatalf("backup reported errors: %v", errors)
+	}
+
+	if err := os.MkdirAll(restoreDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(outsideDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(outsideDir, filepath.Join(restoreDir, "sub")); err != nil {
+		t.Skipf("symlink creation is unavailable: %v", err)
+	}
+	restoreSettings := backupSettings
+	restoreSettings.SrcDir = backupDir
+	restoreSettings.DistDir = restoreDir
+	errors = runWithDrainedView(t, func(toView chan<- view.MessageToView, fromView <-chan view.MessageToManager) {
+		_ = Restore(restoreSettings, toView, fromView)
+	})
+	if len(errors) == 0 {
+		t.Fatal("expected restore to reject a symlinked destination directory")
+	}
+	if _, err := os.Stat(filepath.Join(outsideDir, "file.txt")); !os.IsNotExist(err) {
+		t.Fatalf("restore wrote through destination symlink: %v", err)
 	}
 }

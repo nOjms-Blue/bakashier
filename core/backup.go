@@ -204,6 +204,10 @@ func backupWorker(workerId uint, password string, toManagerQueue chan<- messageF
 		}
 
 		func() {
+			if err := rejectSymlinkPath(queue.DistDir); err != nil {
+				errHandler("Unsafe backup destination", err)
+				return
+			}
 			err := os.MkdirAll(queue.DistDir, 0755)
 			if err != nil {
 				errHandler("Failed to create directory", err)
