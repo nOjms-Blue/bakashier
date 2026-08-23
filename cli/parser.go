@@ -14,6 +14,8 @@ import (
 	"bakashier/archive"
 )
 
+const maxWorkers uint64 = 64
+
 // 親ディレクトリが子ディレクトリのサブパスになっているかを判定する。
 func isSubPath(parent string, child string) bool {
 	if strings.EqualFold(parent, child) {
@@ -120,6 +122,9 @@ func ParseArgs(args []string) (ParsedArgs, error) {
 			if err != nil || parsed == 0 {
 				return ParsedArgs{}, fmt.Errorf("workers must be a positive integer")
 			}
+			if parsed > maxWorkers {
+				return ParsedArgs{}, fmt.Errorf("workers must be at most %d", maxWorkers)
+			}
 			workers = uint32(parsed)
 			i++
 		case "--chunk", "-c":
@@ -213,7 +218,11 @@ func ParseArgs(args []string) (ParsedArgs, error) {
 
 	// ワーカー数を設定する。
 	if workers == 0 {
-		workers = uint32(runtime.GOMAXPROCS(0))
+		defaultWorkers := uint64(runtime.GOMAXPROCS(0))
+		if defaultWorkers > maxWorkers {
+			defaultWorkers = maxWorkers
+		}
+		workers = uint32(defaultWorkers)
 	}
 
 	// チャンクサイズを設定する。

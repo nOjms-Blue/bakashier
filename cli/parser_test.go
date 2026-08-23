@@ -80,3 +80,17 @@ func TestParseArgsRejectsLimitWaitDurationOverflow(t *testing.T) {
 		t.Fatal("expected limit wait duration overflow to be rejected")
 	}
 }
+
+func TestParseArgsRejectsExcessiveWorkerCount(t *testing.T) {
+	tmp := t.TempDir()
+	_, err := ParseArgs([]string{
+		"--backup",
+		filepath.Join(tmp, "source"),
+		filepath.Join(tmp, "destination"),
+		"--workers",
+		"65",
+	})
+	if err == nil {
+		t.Fatal("expected excessive worker count to be rejected")
+	}
+}
