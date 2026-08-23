@@ -400,3 +400,58 @@ func TestRestoreRejectsSymlinkedDestinationDirectory(t *testing.T) {
 		t.Fatalf("restore wrote through destination symlink: %v", err)
 	}
 }
+
+func TestBackupRejectsUnsafeNamesInDirectoryMetadata(t *testing.T) {
+	tmp := t.TempDir()
+	srcDir := filepath.Join(tmp, "src")
+	backupDir := filepath.Join(tmp, "backup")
+	outsideDir := filepath.Join(tmp, "outside")
+	outsideFile := filepath.Join(outsideDir, "valuable.txt")
+	if err := os.MkdirAll(srcDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(backupDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(outsideDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(outsideFile, []byte("must remain"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	entries := []archive.DirectoryEntry{{
+		Type:     archive.Directory,
+		RealName: "deleted",
+		HideName: "../outside",
+	}}
+	if err := saveDirectoryEntries(
+		filepath.Join(backupDir, "_directory_.bks"),
+		srcDir,
+		entries,
+		"test-password",
+		1024,
+	); err != nil {
+		t.Fatal(err)
+	}
+
+	settings := Settings{
+		SrcDir:    srcDir,
+		DistDir:   backupDir,
+		Password:  "test-password",
+		Workers:   1,
+		ChunkSize: 1024,
+	}
+	errors := runWithDrainedView(t, func(toView chan<- view.MessageToView, fromView <-chan view.MessageToManager) {
+		_ = Backup(settings, toView, fromView)
+	})
+	if len(errors) == 0 {
+		t.Fatal("expected unsafe directory metadata to be rejected")
+	}
+	got, err := os.ReadFile(outsideFile)
+	if err != nil {
+		t.Fatalf("backup deleted a file outside its destination: %v", err)
+	}
+	if string(got) != "must remain" {
+		t.Fatalf("outside file changed: got %q", got)
+	}
+}

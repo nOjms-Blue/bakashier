@@ -156,6 +156,12 @@ func loadDirectoryEntries(directoryEntryFile string, password string) ([]archive
 
 	var entries []archive.DirectoryEntry
 	err = archive.ImportDirectoryEntries(bytes.NewReader(buf.Bytes()), func(entry archive.DirectoryEntry) error {
+		if entry.Type != archive.File && entry.Type != archive.Directory {
+			return fmt.Errorf("invalid directory entry type: %q", entry.Type)
+		}
+		if !archive.IsSafeFileName(entry.RealName) || !archive.IsSafeFileName(entry.HideName) {
+			return fmt.Errorf("unsafe directory entry name: real=%q hide=%q", entry.RealName, entry.HideName)
+		}
 		entries = append(entries, entry)
 		return nil
 	})
