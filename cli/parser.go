@@ -1,7 +1,9 @@
 package cli
 
 import (
+	"errors"
 	"fmt"
+	"os"
 	"path/filepath"
 	"runtime"
 	"strconv"
@@ -23,19 +25,46 @@ func isSubPath(parent string, child string) bool {
 	return strings.HasPrefix(strings.ToLower(child), strings.ToLower(parentWithSep))
 }
 
+// 存在しない末尾要素を許容しながら、既存の祖先に含まれるシンボリックリンクを解決する。
+func resolveDirectoryPath(path string) (string, error) {
+	absolute, err := filepath.Abs(path)
+	if err != nil {
+		return "", err
+	}
+
+	current := filepath.Clean(absolute)
+	missingParts := []string{}
+	for {
+		resolved, err := filepath.EvalSymlinks(current)
+		if err == nil {
+			for i := len(missingParts) - 1; i >= 0; i-- {
+				resolved = filepath.Join(resolved, missingParts[i])
+			}
+			return filepath.Clean(resolved), nil
+		}
+		if !errors.Is(err, os.ErrNotExist) {
+			return "", err
+		}
+
+		parent := filepath.Dir(current)
+		if parent == current {
+			return "", err
+		}
+		missingParts = append(missingParts, filepath.Base(current))
+		current = parent
+	}
+}
+
 // ソースディレクトリと出力先ディレクトリが親子関係になっているかを判定する。
 func isParentChildDirectory(pathA string, pathB string) (bool, error) {
-	absA, err := filepath.Abs(pathA)
+	cleanA, err := resolveDirectoryPath(pathA)
 	if err != nil {
 		return false, fmt.Errorf("failed to resolve src_dir: %w", err)
 	}
-	absB, err := filepath.Abs(pathB)
+	cleanB, err := resolveDirectoryPath(pathB)
 	if err != nil {
 		return false, fmt.Errorf("failed to resolve dist_dir: %w", err)
 	}
-
-	cleanA := filepath.Clean(absA)
-	cleanB := filepath.Clean(absB)
 
 	return isSubPath(cleanA, cleanB) || isSubPath(cleanB, cleanA), nil
 }
