@@ -61,7 +61,8 @@ func (bks BksArchive) Import(reader io.Reader, getWriter func(name string) (io.W
 	}
 
 	// 対応バージョンのチェック
-	if binary.BigEndian.Uint16(header[3:5]) != 1 {
+	version := binary.BigEndian.Uint16(header[3:5])
+	if version != 1 && version != 2 {
 		return errors.New("unsupported version number")
 	}
 
@@ -99,6 +100,9 @@ func (bks BksArchive) Import(reader io.Reader, getWriter func(name string) (io.W
 	for {
 		n, err := io.ReadFull(reader, chunkLenBytes)
 		if n == 0 || err == io.EOF {
+			if version >= 2 {
+				return errors.New("invalid archive: missing end marker")
+			}
 			break
 		}
 		if err != nil {
@@ -108,6 +112,17 @@ func (bks BksArchive) Import(reader io.Reader, getWriter func(name string) (io.W
 			return errors.New("invalid archive: truncated chunk length")
 		}
 		chunkLength = binary.BigEndian.Uint64(chunkLenBytes)
+		if version >= 2 && chunkLength == 0 {
+			var trailing [1]byte
+			n, trailingErr := io.ReadFull(reader, trailing[:])
+			if n != 0 || trailingErr != io.EOF {
+				if trailingErr != nil && trailingErr != io.EOF {
+					return trailingErr
+				}
+				return errors.New("invalid archive: trailing data after end marker")
+			}
+			break
+		}
 		if chunkLength > maxEncryptedChunkSize {
 			return fmt.Errorf("invalid archive: chunk too large (%d bytes)", chunkLength)
 		}

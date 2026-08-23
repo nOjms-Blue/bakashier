@@ -128,6 +128,51 @@ func TestBksArchiveTruncated(t *testing.T) {
 	}
 }
 
+func TestBksArchiveTruncatedAfterNameBlock(t *testing.T) {
+	bks := BksArchive{
+		Password:  testPassword,
+		ChunkSize: 1024,
+	}
+	var archived bytes.Buffer
+	if err := bks.Export("source.bin", bytes.NewReader([]byte("data")), &archived); err != nil {
+		t.Fatal(err)
+	}
+	full := archived.Bytes()
+	nameLen := binary.BigEndian.Uint32(full[5:9])
+	cut := 9 + int(nameLen) + 4
+
+	err := bks.Import(bytes.NewReader(full[:cut]), func(name string) (io.Writer, error) {
+		return io.Discard, nil
+	})
+	if err == nil || !strings.Contains(err.Error(), "missing end marker") {
+		t.Fatalf("expected missing end marker error, got: %v", err)
+	}
+}
+
+func TestBksArchiveImportsVersion1WithoutEndMarker(t *testing.T) {
+	bks := BksArchive{
+		Password:  testPassword,
+		ChunkSize: 1024,
+	}
+	var archived bytes.Buffer
+	if err := bks.Export("empty.txt", bytes.NewReader(nil), &archived); err != nil {
+		t.Fatal(err)
+	}
+	legacy := append([]byte{}, archived.Bytes()...)
+	binary.BigEndian.PutUint16(legacy[3:5], 1)
+	legacy = legacy[:len(legacy)-8]
+
+	var output bytes.Buffer
+	if err := bks.Import(bytes.NewReader(legacy), func(name string) (io.Writer, error) {
+		return &output, nil
+	}); err != nil {
+		t.Fatalf("version 1 import failed: %v", err)
+	}
+	if output.Len() != 0 {
+		t.Fatalf("version 1 empty file restored with %d bytes", output.Len())
+	}
+}
+
 func TestBksArchiveOversizedChunkLength(t *testing.T) {
 	bks := BksArchive{
 		Password:  testPassword,
