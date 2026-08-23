@@ -366,6 +366,13 @@ func backupWorker(workerId uint, password string, toManagerQueue chan<- messageF
 						err = exportArchiveFile(srcFile, archiveFile, file.Name(), password, chunkSize)
 						if err != nil {
 							errHandler("Failed to export stream archive", err)
+							// 原子的な更新で残っている直前の正常なアーカイブを、
+							// 後続の削除処理から保護する。
+							if entry.Type == archive.File {
+								if _, statErr := os.Stat(archiveFile); statErr == nil {
+									newEntries[hideName] = entry
+								}
+							}
 							return
 						}
 
