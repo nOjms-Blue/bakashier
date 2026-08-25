@@ -2,9 +2,18 @@ package view
 
 import (
 	"bakashier/cli"
+	"fmt"
 
 	tea "github.com/charmbracelet/bubbletea"
 )
+
+func asViewModel(value tea.Model) (model, error) {
+	result, ok := value.(model)
+	if !ok {
+		return model{}, fmt.Errorf("unexpected view model type %T", value)
+	}
+	return result, nil
+}
 
 func Run(mode cli.ModeType, receiveQueue <-chan MessageToView, sendQueue chan<- MessageToManager) (model, error) {
 	m := model{
@@ -17,5 +26,8 @@ func Run(mode cli.ModeType, receiveQueue <-chan MessageToView, sendQueue chan<- 
 	}
 	program := tea.NewProgram(m)
 	rm, err := program.Run()
-	return rm.(model), err
+	if err != nil {
+		return m, err
+	}
+	return asViewModel(rm)
 }

@@ -42,7 +42,7 @@ func (bks BksArchive) Export(name string, reader io.Reader, writer io.Writer) er
 
 	// ヘッダの bakashier 形式のファイルバージョン
 	var versionBytes = make([]byte, 2)
-	binary.BigEndian.PutUint16(versionBytes, 1)
+	binary.BigEndian.PutUint16(versionBytes, 2)
 	_, err = writer.Write(versionBytes)
 	if err != nil {
 		return err
@@ -98,6 +98,12 @@ func (bks BksArchive) Export(name string, reader io.Reader, writer io.Writer) er
 				return err
 			}
 		}
+	}
+
+	// v2 では空ファイルと切断を区別するため、長さ 0 の終端マーカーを書き込む。
+	binary.BigEndian.PutUint64(chunkLenBytes, 0)
+	if _, err = writer.Write(chunkLenBytes); err != nil {
+		return err
 	}
 
 	return nil
