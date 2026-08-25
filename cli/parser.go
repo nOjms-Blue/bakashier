@@ -80,6 +80,7 @@ func ParseArgs(args []string) (ParsedArgs, error) {
 	var mode ModeType
 	var srcDir string
 	var distDir string
+	var password string
 	var workers uint32 = uint32(0)      // 0 = 未指定（デフォルト使用）
 	var chunkSizeMiB uint64 = uint64(0) // 0 = 未指定（デフォルト使用）
 	var limitSizeMiB uint64 = uint64(0) // 0 = 未指定（デフォルト使用）
@@ -100,6 +101,16 @@ func ParseArgs(args []string) (ParsedArgs, error) {
 				return ParsedArgs{}, fmt.Errorf("cannot use backup and restore at the same time")
 			}
 			mode = ModeRestore
+		case "--password", "-p":
+			if i+1 >= len(args) {
+				return ParsedArgs{}, fmt.Errorf("password value is required")
+			}
+			next := args[i+1]
+			if len(next) == 0 || next[0] == '-' {
+				return ParsedArgs{}, fmt.Errorf("password value is required")
+			}
+			password = next
+			i++
 		case "--workers", "-w":
 			if i+1 >= len(args) {
 				return ParsedArgs{}, fmt.Errorf("workers value is required")
@@ -240,6 +251,7 @@ func ParseArgs(args []string) (ParsedArgs, error) {
 		Mode:      mode,
 		SrcDir:    srcDir,
 		DistDir:   distDir,
+		Password:  password,
 		Workers:   workers,
 		ChunkSize: chunkSize,
 		LimitSize: limitSizeMiB,

@@ -111,16 +111,19 @@ func TestParseArgsRejectsExcessiveConcurrentChunkMemory(t *testing.T) {
 	}
 }
 
-func TestParseArgsRejectsCommandLinePassword(t *testing.T) {
+func TestParseArgsAcceptsCommandLinePassword(t *testing.T) {
 	tmp := t.TempDir()
-	_, err := ParseArgs([]string{
+	args, err := ParseArgs([]string{
 		"--backup",
 		filepath.Join(tmp, "source"),
 		filepath.Join(tmp, "destination"),
 		"--password",
 		"secret",
 	})
-	if err == nil {
-		t.Fatal("expected command-line password to be rejected")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if args.Password != "secret" {
+		t.Fatalf("password = %q, want %q", args.Password, "secret")
 	}
 }

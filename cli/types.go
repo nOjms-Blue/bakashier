@@ -15,6 +15,7 @@ type ParsedArgs struct {
 	Mode      ModeType
 	SrcDir    string
 	DistDir   string
+	Password  string
 	ChunkSize uint64
 	LimitSize uint64
 	LimitWait uint64

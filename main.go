@@ -24,16 +24,19 @@ func main() {
 	settings := core.Settings{
 		SrcDir:    args.SrcDir,
 		DistDir:   args.DistDir,
+		Password:  args.Password,
 		Workers:   args.Workers,
 		ChunkSize: args.ChunkSize,
 		Limit:     core.SettingsLimit{Size: args.LimitSize, Wait: args.LimitWait},
 	}
 	run := func() error {
-		input, err := cli.InputPassword()
-		if err != nil {
-			return err
+		if settings.Password == "" {
+			input, err := cli.InputPassword()
+			if err != nil {
+				return err
+			}
+			settings.Password = input
 		}
-		settings.Password = input
 
 		wg := sync.WaitGroup{}
 		toViewQueue := make(chan view.MessageToView, 64)
