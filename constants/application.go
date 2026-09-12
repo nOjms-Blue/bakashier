@@ -1,4 +1,4 @@
 package constants
 
 const APP_NAME = "bakashier"
-const APP_VERSION = "0.2.2"
+const APP_VERSION = "0.2.3"
