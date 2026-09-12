@@ -2,10 +2,9 @@ package cli
 
 import (
 	"fmt"
-	
+
 	"bakashier/constants"
 )
-
 
 // コマンドラインの使い方を標準出力に表示する。
 func Usage() {

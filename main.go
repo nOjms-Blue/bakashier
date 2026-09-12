@@ -5,13 +5,12 @@ import (
 	"fmt"
 	"os"
 	"sync"
-	
+
 	"bakashier/cli"
 	"bakashier/constants"
 	"bakashier/core"
 	"bakashier/view"
 )
-
 
 func main() {
 	args, err := cli.ParseArgs(os.Args[1:])
@@ -20,14 +19,14 @@ func main() {
 		cli.Usage()
 		os.Exit(1)
 	}
-	
+
 	settings := core.Settings{
-		SrcDir: args.SrcDir,
-		DistDir: args.DistDir,
-		Password: args.Password,
-		Workers: args.Workers,
+		SrcDir:    args.SrcDir,
+		DistDir:   args.DistDir,
+		Password:  args.Password,
+		Workers:   args.Workers,
 		ChunkSize: args.ChunkSize,
-		Limit: core.SettingsLimit{Size: args.LimitSize, Wait: args.LimitWait},
+		Limit:     core.SettingsLimit{Size: args.LimitSize, Wait: args.LimitWait},
 	}
 	run := func() {
 		if settings.Password == "" {
@@ -38,11 +37,11 @@ func main() {
 			}
 			settings.Password = input
 		}
-		
+
 		wg := sync.WaitGroup{}
 		toViewQueue := make(chan view.MessageToView, 64)
 		toManagerQueue := make(chan view.MessageToManager, 64)
-		
+
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
@@ -51,7 +50,7 @@ func main() {
 				fmt.Println(err.Error())
 				return
 			}
-			
+
 			if len(model.ErrorLog) > 0 {
 				for _, e := range model.ErrorLog {
 					fmt.Println(e)
@@ -65,7 +64,7 @@ func main() {
 		}
 		wg.Wait()
 	}
-	
+
 	switch args.Mode {
 	case cli.ModeBackup:
 		run()

@@ -6,10 +6,9 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
-	
-	"bakashier/data"
-)
 
+	"bakashier/archive"
+)
 
 // 親ディレクトリが子ディレクトリのサブパスになっているかを判定する。
 func isSubPath(parent string, child string) bool {
@@ -34,10 +33,10 @@ func isParentChildDirectory(pathA string, pathB string) (bool, error) {
 	if err != nil {
 		return false, fmt.Errorf("failed to resolve dist_dir: %w", err)
 	}
-	
+
 	cleanA := filepath.Clean(absA)
 	cleanB := filepath.Clean(absB)
-	
+
 	return isSubPath(cleanA, cleanB) || isSubPath(cleanB, cleanA), nil
 }
 
@@ -53,7 +52,7 @@ func ParseArgs(args []string) (ParsedArgs, error) {
 	var limitSizeMiB uint64 = uint64(0) // 0 = 未指定（デフォルト使用）
 	var limitWaitSec uint64 = uint64(0) // 0 = 未指定（デフォルト使用）
 	positional := make([]string, 0, 2)
-	
+
 	// 引数を解析する。
 	for i := 0; i < len(args); i++ {
 		arg := args[i]
@@ -104,6 +103,9 @@ func ParseArgs(args []string) (ParsedArgs, error) {
 			if err != nil || parsed == 0 {
 				return ParsedArgs{}, fmt.Errorf("chunk size must be a positive integer (MiB)")
 			}
+			if parsed > archive.MAX_CHUNK_SIZE/(1024*1024) {
+				return ParsedArgs{}, fmt.Errorf("chunk size must be at most %d MiB", archive.MAX_CHUNK_SIZE/(1024*1024))
+			}
 			chunkSizeMiB = parsed
 			i++
 		case "--limit-size", "-ls":
@@ -145,7 +147,7 @@ func ParseArgs(args []string) (ParsedArgs, error) {
 			positional = append(positional, arg)
 		}
 	}
-	
+
 	// 必須項目が不足している場合はエラーを返す。
 	if mode == "" {
 		return ParsedArgs{}, fmt.Errorf("backup or restore mode is required")
@@ -156,11 +158,11 @@ func ParseArgs(args []string) (ParsedArgs, error) {
 	if len(positional) > 2 {
 		return ParsedArgs{}, fmt.Errorf("too many positional arguments")
 	}
-	
+
 	// ソースディレクトリと出力先ディレクトリを設定する。
 	srcDir = positional[0]
 	distDir = positional[1]
-	
+
 	// ソースディレクトリと出力先ディレクトリが親子関係になっている場合はエラーを返す。
 	if mode == ModeBackup || mode == ModeRestore {
 		invalid, err := isParentChildDirectory(srcDir, distDir)
@@ -171,20 +173,20 @@ func ParseArgs(args []string) (ParsedArgs, error) {
 			return ParsedArgs{}, fmt.Errorf("src_dir and dist_dir cannot be parent-child directories")
 		}
 	}
-	
+
 	// ワーカー数を設定する。
 	if workers == 0 {
 		workers = uint32(runtime.GOMAXPROCS(0))
 	}
-	
+
 	// チャンクサイズを設定する。
-	chunkSize := data.ChunkSize
+	chunkSize := archive.DEFAULT_CHUNK_SIZE
 	if chunkSizeMiB > 0 {
 		chunkSize = chunkSizeMiB * 1024 * 1024
 	} else {
-		chunkSize = data.ChunkSize
+		chunkSize = archive.DEFAULT_CHUNK_SIZE
 	}
-	
+
 	// 解析結果を返す。
 	return ParsedArgs{
 		Mode:      mode,

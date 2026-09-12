@@ -4,14 +4,13 @@ import (
 	"fmt"
 	"sort"
 	"strings"
-	
+
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
-	
+
 	"bakashier/cli"
 	"bakashier/constants"
 )
-
 
 type workerStatus struct {
 	srcDirectory  string
@@ -104,7 +103,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.sendQueue <- MessageToManager{MsgType: TERMINATION}
 		}
 	}
-	
+
 	return m, nil
 }
 
@@ -113,24 +112,24 @@ func (m model) View() string {
 	var modeLabel string = "unknown"
 	var working bool = false
 	var workerIds []uint = make([]uint, 0, len(m.workers))
-	
+
 	switch m.mode {
 	case cli.ModeBackup:
 		modeLabel = "Backup"
 	case cli.ModeRestore:
 		modeLabel = "Restore"
 	}
-	
+
 	red := lipgloss.NewStyle().Foreground(lipgloss.Color("1"))
 	gray := lipgloss.NewStyle().Foreground(lipgloss.Color("8"))
-	
+
 	for workerId := range m.workers {
 		workerIds = append(workerIds, workerId)
 	}
 	sort.Slice(workerIds, func(i, j int) bool {
 		return workerIds[i] < workerIds[j]
 	})
-	
+
 	b.WriteString(fmt.Sprintf("Total Workers %d\n", len(m.workers)))
 	for _, workerId := range workerIds {
 		workerStatus := m.workers[workerId]
@@ -146,22 +145,22 @@ func (m model) View() string {
 			b.WriteString(fmt.Sprintf("Worker %2d: %s\n\n", workerId, gray.Render("(idle)")))
 		}
 	}
-	
+
 	b.WriteString("--------------------\n")
-	
+
 	for i := 0; i < MAX_ERROR_LOGS; i++ {
 		if len(m.ErrorLog) < MAX_ERROR_LOGS {
 			if i < len(m.ErrorLog) {
 				b.WriteString(red.Render(m.ErrorLog[i]))
 			}
 		} else {
-			b.WriteString(red.Render(m.ErrorLog[len(m.ErrorLog) - (MAX_ERROR_LOGS - i)]))
+			b.WriteString(red.Render(m.ErrorLog[len(m.ErrorLog)-(MAX_ERROR_LOGS-i)]))
 		}
 		b.WriteString("\n")
 	}
-	
+
 	b.WriteString("--------------------\n")
-	
+
 	if m.quit {
 		if working {
 			b.WriteString(gray.Render("quitting...") + " \n")
@@ -178,7 +177,7 @@ func (m model) View() string {
 		b.WriteString("(S) stop    (Q) quit\n")
 	}
 	b.WriteString(fmt.Sprintf("%s v%s\n", constants.APP_NAME, constants.APP_VERSION))
-	
+
 	if !working {
 		if !m.stop && !m.quit {
 			b.Reset()

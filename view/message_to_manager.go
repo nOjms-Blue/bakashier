@@ -1,6 +1,5 @@
 package view
 
-
 type MessageToManagerType string
 
 const (
