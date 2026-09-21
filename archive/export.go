@@ -34,6 +34,9 @@ func (bks BksArchive) Export(name string, reader io.Reader, writer io.Writer) er
 		return errors.New("chunk size is out of range")
 	}
 
+	// 大きなチャンクを一括 Write すると、Windows で ERROR_NO_SYSTEM_RESOURCES になる。
+	writer = newLimitedWriter(writer)
+
 	// ヘッダの bakashier 形式判定用の "BKS"
 	_, err := writer.Write([]byte("BKS"))
 	if err != nil {

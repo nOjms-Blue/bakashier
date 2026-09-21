@@ -228,6 +228,74 @@ func TestImportArchiveFileRejectsUnexpectedFileName(t *testing.T) {
 	}
 }
 
+func TestExportArchiveFileOverwritesExistingDestination(t *testing.T) {
+	tmp := t.TempDir()
+	srcFile := filepath.Join(tmp, "source.txt")
+	dstFile := filepath.Join(tmp, "archive.bks")
+
+	if err := os.WriteFile(srcFile, []byte("first version"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := exportArchiveFile(srcFile, dstFile, "source.txt", testPassword, 1024); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(srcFile, []byte("second version"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := exportArchiveFile(srcFile, dstFile, "source.txt", testPassword, 1024); err != nil {
+		t.Fatalf("overwrite export failed: %v", err)
+	}
+
+	restoreDir := filepath.Join(tmp, "restore")
+	if err := os.MkdirAll(restoreDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	restored, err := importArchiveFile(dstFile, restoreDir, testPassword)
+	if err != nil {
+		t.Fatalf("importArchiveFile failed: %v", err)
+	}
+	got, err := os.ReadFile(restored)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(got) != "second version" {
+		t.Fatalf("restored content = %q, want second version", got)
+	}
+}
+
+func TestImportArchiveFileOverwritesExistingDestination(t *testing.T) {
+	tmp := t.TempDir()
+	srcFile := filepath.Join(tmp, "source.txt")
+	archiveFile := filepath.Join(tmp, "archive.bks")
+	restoreDir := filepath.Join(tmp, "restore")
+	existingFile := filepath.Join(restoreDir, "source.txt")
+
+	if err := os.WriteFile(srcFile, []byte("new data"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := exportArchiveFile(srcFile, archiveFile, "source.txt", testPassword, 1024); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(restoreDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(existingFile, []byte("old restored data"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	restored, err := importArchiveFile(archiveFile, restoreDir, testPassword)
+	if err != nil {
+		t.Fatalf("importArchiveFile failed: %v", err)
+	}
+	got, err := os.ReadFile(restored)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(got) != "new data" {
+		t.Fatalf("restored content = %q, want new data", got)
+	}
+}
+
 func TestExportArchiveFileFailurePreservesExistingDestination(t *testing.T) {
 	tmp := t.TempDir()
 	srcFile := filepath.Join(tmp, "source.txt")

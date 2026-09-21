@@ -199,6 +199,65 @@ func TestBackupPreservesDestinationWhenMetadataCannotBeInspected(t *testing.T) {
 	}
 }
 
+func TestIncrementalBackupOverwritesChangedFile(t *testing.T) {
+	tmp := t.TempDir()
+	srcDir := filepath.Join(tmp, "src")
+	backupDir := filepath.Join(tmp, "backup")
+	restoreDir := filepath.Join(tmp, "restore")
+	srcFile := filepath.Join(srcDir, "source.txt")
+
+	if err := os.MkdirAll(srcDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(srcFile, []byte("previous version"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	settings := Settings{
+		SrcDir:    srcDir,
+		DistDir:   backupDir,
+		Password:  "test-password",
+		Workers:   1,
+		ChunkSize: 1024,
+	}
+	errors := runWithDrainedView(t, func(toView chan<- view.MessageToView, fromView <-chan view.MessageToManager) {
+		Backup(settings, toView, fromView)
+	})
+	if len(errors) != 0 {
+		t.Fatalf("initial backup reported errors: %v", errors)
+	}
+
+	if err := os.WriteFile(srcFile, []byte("updated version"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	errors = runWithDrainedView(t, func(toView chan<- view.MessageToView, fromView <-chan view.MessageToManager) {
+		Backup(settings, toView, fromView)
+	})
+	if len(errors) != 0 {
+		t.Fatalf("incremental backup reported errors: %v", errors)
+	}
+
+	restoreSettings := Settings{
+		SrcDir:    backupDir,
+		DistDir:   restoreDir,
+		Password:  "test-password",
+		Workers:   1,
+		ChunkSize: 1024,
+	}
+	errors = runWithDrainedView(t, func(toView chan<- view.MessageToView, fromView <-chan view.MessageToManager) {
+		Restore(restoreSettings, toView, fromView)
+	})
+	if len(errors) != 0 {
+		t.Fatalf("restore reported errors: %v", errors)
+	}
+	got, err := os.ReadFile(filepath.Join(restoreDir, "source.txt"))
+	if err != nil {
+		t.Fatalf("updated file could not be restored: %v", err)
+	}
+	if string(got) != "updated version" {
+		t.Fatalf("restored content = %q, want updated version", got)
+	}
+}
+
 func TestFailedIncrementalBackupPreservesPreviousFileVersion(t *testing.T) {
 	tmp := t.TempDir()
 	srcDir := filepath.Join(tmp, "src")

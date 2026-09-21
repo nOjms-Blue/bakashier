@@ -48,7 +48,7 @@ func writeFileAtomically(path string, write func(io.Writer) error) error {
 	if err := tmp.Close(); err != nil {
 		return err
 	}
-	if err := os.Rename(tmpPath, path); err != nil {
+	if err := replaceFile(tmpPath, path); err != nil {
 		return err
 	}
 	return nil
@@ -123,7 +123,7 @@ func importArchiveFileWithExpectedName(archiveFile string, dstDirectory string, 
 	if dstFile == "" {
 		return "", errors.New("archive did not contain any file data")
 	}
-	if err := os.Rename(tmpFile, dstFile); err != nil {
+	if err := replaceFile(tmpFile, dstFile); err != nil {
 		_ = os.Remove(tmpFile)
 		return "", err
 	}
