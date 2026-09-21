@@ -3,6 +3,7 @@ package core
 import (
 	"bytes"
 	"encoding/binary"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -203,6 +204,141 @@ func TestImportArchiveFileRejectsUnsafeFileName(t *testing.T) {
 	}
 }
 
+func TestImportArchiveFileRejectsUnexpectedFileName(t *testing.T) {
+	tmp := t.TempDir()
+	srcFile := filepath.Join(tmp, "source.txt")
+	archiveFile := filepath.Join(tmp, "archive.bks")
+	restoreDir := filepath.Join(tmp, "restore")
+	if err := os.WriteFile(srcFile, []byte("content"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := exportArchiveFile(srcFile, archiveFile, "other.txt", testPassword, 1024); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(restoreDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+
+	_, err := importArchiveFileWithExpectedName(archiveFile, restoreDir, testPassword, "expected.txt")
+	if err == nil || !strings.Contains(err.Error(), "file name mismatch") {
+		t.Fatalf("expected file name mismatch error, got: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(restoreDir, "other.txt")); !os.IsNotExist(err) {
+		t.Fatalf("unexpected archive name was written: %v", err)
+	}
+}
+
+func TestExportArchiveFileFailurePreservesExistingDestination(t *testing.T) {
+	tmp := t.TempDir()
+	srcFile := filepath.Join(tmp, "source.txt")
+	dstFile := filepath.Join(tmp, "archive.bks")
+	original := []byte("previous valid archive")
+
+	if err := os.WriteFile(srcFile, []byte("new data"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(dstFile, original, 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := exportArchiveFile(srcFile, dstFile, "source.txt", testPassword, 0); err == nil {
+		t.Fatal("expected export failure for invalid chunk size")
+	}
+
+	got, err := os.ReadFile(dstFile)
+	if err != nil {
+		t.Fatalf("existing destination was removed: %v", err)
+	}
+	if !bytes.Equal(got, original) {
+		t.Fatalf("existing destination changed after failed export: got %q", got)
+	}
+}
+
+func TestImportArchiveFileFailurePreservesExistingDestination(t *testing.T) {
+	tmp := t.TempDir()
+	srcFile := filepath.Join(tmp, "source.txt")
+	archiveFile := filepath.Join(tmp, "archive.bks")
+	restoreDir := filepath.Join(tmp, "restore")
+	existingFile := filepath.Join(restoreDir, "source.txt")
+	original := []byte("existing restored data")
+
+	if err := os.WriteFile(srcFile, []byte("new data"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := exportArchiveFile(srcFile, archiveFile, "source.txt", testPassword, 1024); err != nil {
+		t.Fatal(err)
+	}
+	archiveData, err := os.ReadFile(archiveFile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	archiveData[len(archiveData)-1] ^= 0xff
+	if err := os.WriteFile(archiveFile, archiveData, 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(restoreDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(existingFile, original, 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := importArchiveFile(archiveFile, restoreDir, testPassword); err == nil {
+		t.Fatal("expected import failure for corrupted archive")
+	}
+
+	got, err := os.ReadFile(existingFile)
+	if err != nil {
+		t.Fatalf("existing destination was removed: %v", err)
+	}
+	if !bytes.Equal(got, original) {
+		t.Fatalf("existing destination changed after failed import: got %q", got)
+	}
+}
+
+func TestImportArchiveFileDoesNotFollowDestinationSymlink(t *testing.T) {
+	tmp := t.TempDir()
+	srcFile := filepath.Join(tmp, "source.txt")
+	archiveFile := filepath.Join(tmp, "archive.bks")
+	restoreDir := filepath.Join(tmp, "restore")
+	outsideFile := filepath.Join(tmp, "outside.txt")
+
+	if err := os.WriteFile(srcFile, []byte("restored data"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := exportArchiveFile(srcFile, archiveFile, "source.txt", testPassword, 1024); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(restoreDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(outsideFile, []byte("outside data"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(outsideFile, filepath.Join(restoreDir, "source.txt")); err != nil {
+		t.Skipf("symlink creation is unavailable: %v", err)
+	}
+
+	if _, err := importArchiveFile(archiveFile, restoreDir, testPassword); err != nil {
+		t.Fatalf("importArchiveFile failed: %v", err)
+	}
+
+	outside, err := os.ReadFile(outsideFile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(outside) != "outside data" {
+		t.Fatalf("restore followed destination symlink and changed outside file: got %q", outside)
+	}
+	restored, err := os.ReadFile(filepath.Join(restoreDir, "source.txt"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(restored) != "restored data" {
+		t.Fatalf("restored content = %q, want %q", restored, "restored data")
+	}
+}
+
 func TestSaveLoadDirectoryEntries(t *testing.T) {
 	tmp := t.TempDir()
 
@@ -247,6 +383,34 @@ func TestSaveLoadDirectoryEntries(t *testing.T) {
 	}
 }
 
+func TestSaveDirectoryEntriesFailurePreservesExistingDestination(t *testing.T) {
+	tmp := t.TempDir()
+	directoryEntryFile := filepath.Join(tmp, "_directory_.bks")
+	original := []byte("previous valid directory archive")
+
+	if err := os.WriteFile(directoryEntryFile, original, 0644); err != nil {
+		t.Fatal(err)
+	}
+	err := saveDirectoryEntries(
+		directoryEntryFile,
+		"/source",
+		[]archive.DirectoryEntry{{Type: archive.File, RealName: "file.txt", HideName: "hidden"}},
+		testPassword,
+		0,
+	)
+	if err == nil {
+		t.Fatal("expected save failure for invalid chunk size")
+	}
+
+	got, readErr := os.ReadFile(directoryEntryFile)
+	if readErr != nil {
+		t.Fatalf("existing directory archive was removed: %v", readErr)
+	}
+	if !bytes.Equal(got, original) {
+		t.Fatalf("existing directory archive changed after failed save: got %q", got)
+	}
+}
+
 func TestLoadDirectoryEntriesMissingFile(t *testing.T) {
 	entries, err := loadDirectoryEntries(filepath.Join(t.TempDir(), "_directory_.bks"), testPassword)
 	if err != nil {
@@ -254,5 +418,31 @@ func TestLoadDirectoryEntriesMissingFile(t *testing.T) {
 	}
 	if len(entries) != 0 {
 		t.Fatalf("expected empty entries, got %d", len(entries))
+	}
+}
+
+func TestLoadDirectoryEntriesPropagatesNonExistenceRelatedStatErrors(t *testing.T) {
+	tmp := t.TempDir()
+	notDirectory := filepath.Join(tmp, "not-a-directory")
+	if err := os.WriteFile(notDirectory, []byte("file"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	entries, err := loadDirectoryEntries(filepath.Join(notDirectory, "_directory_.bks"), testPassword)
+	if err == nil {
+		t.Fatalf("expected ENOTDIR to be returned, got entries: %+v", entries)
+	}
+}
+
+func TestLimitedBufferRejectsCumulativeSizeOverflow(t *testing.T) {
+	buf := limitedBuffer{maxSize: 8}
+	if _, err := buf.Write([]byte("123456")); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := buf.Write([]byte("789")); !errors.Is(err, errDirectoryEntriesTooLarge) {
+		t.Fatalf("error = %v, want %v", err, errDirectoryEntriesTooLarge)
+	}
+	if buf.buffer.Len() != 6 {
+		t.Fatalf("buffer length = %d, want 6", buf.buffer.Len())
 	}
 }

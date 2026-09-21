@@ -128,6 +128,51 @@ func TestBksArchiveTruncated(t *testing.T) {
 	}
 }
 
+func TestBksArchiveTruncatedAfterNameBlock(t *testing.T) {
+	bks := BksArchive{
+		Password:  testPassword,
+		ChunkSize: 1024,
+	}
+	var archived bytes.Buffer
+	if err := bks.Export("source.bin", bytes.NewReader([]byte("data")), &archived); err != nil {
+		t.Fatal(err)
+	}
+	full := archived.Bytes()
+	nameLen := binary.BigEndian.Uint32(full[5:9])
+	cut := 9 + int(nameLen) + 4
+
+	err := bks.Import(bytes.NewReader(full[:cut]), func(name string) (io.Writer, error) {
+		return io.Discard, nil
+	})
+	if err == nil || !strings.Contains(err.Error(), "missing end marker") {
+		t.Fatalf("expected missing end marker error, got: %v", err)
+	}
+}
+
+func TestBksArchiveImportsVersion1WithoutEndMarker(t *testing.T) {
+	bks := BksArchive{
+		Password:  testPassword,
+		ChunkSize: 1024,
+	}
+	var archived bytes.Buffer
+	if err := bks.Export("empty.txt", bytes.NewReader(nil), &archived); err != nil {
+		t.Fatal(err)
+	}
+	legacy := append([]byte{}, archived.Bytes()...)
+	binary.BigEndian.PutUint16(legacy[3:5], 1)
+	legacy = legacy[:len(legacy)-8]
+
+	var output bytes.Buffer
+	if err := bks.Import(bytes.NewReader(legacy), func(name string) (io.Writer, error) {
+		return &output, nil
+	}); err != nil {
+		t.Fatalf("version 1 import failed: %v", err)
+	}
+	if output.Len() != 0 {
+		t.Fatalf("version 1 empty file restored with %d bytes", output.Len())
+	}
+}
+
 func TestBksArchiveOversizedChunkLength(t *testing.T) {
 	bks := BksArchive{
 		Password:  testPassword,
@@ -149,6 +194,80 @@ func TestBksArchiveOversizedChunkLength(t *testing.T) {
 	})
 	if err == nil || !strings.Contains(err.Error(), "chunk too large") {
 		t.Fatalf("expected 'chunk too large' error, got: %v", err)
+	}
+}
+
+func TestBksArchiveRejectsOversizedDecompressedName(t *testing.T) {
+	bks := BksArchive{
+		Password:  testPassword,
+		ChunkSize: 1024,
+	}
+	name := strings.Repeat("a", int(maxEncryptedNameSize)+1)
+
+	var archived bytes.Buffer
+	if err := bks.Export(name, bytes.NewReader(nil), &archived); err != nil {
+		t.Fatal(err)
+	}
+	called := false
+	err := bks.Import(bytes.NewReader(archived.Bytes()), func(name string) (io.Writer, error) {
+		called = true
+		return io.Discard, nil
+	})
+	if err == nil {
+		t.Fatal("expected oversized decompressed name to be rejected")
+	}
+	if called {
+		t.Fatal("getWriter was called with an oversized name")
+	}
+}
+
+func TestBksArchiveTruncatedMaximumLengthDoesNotPreallocateClaimedSize(t *testing.T) {
+	bks := BksArchive{
+		Password:  testPassword,
+		ChunkSize: 1024,
+	}
+	var archived bytes.Buffer
+	if err := bks.Export("source.bin", bytes.NewReader([]byte("data")), &archived); err != nil {
+		t.Fatal(err)
+	}
+	tampered := append([]byte{}, archived.Bytes()...)
+	nameLen := binary.BigEndian.Uint32(tampered[5:9])
+	chunkLenOffset := 9 + int(nameLen) + 4
+	binary.BigEndian.PutUint64(tampered[chunkLenOffset:chunkLenOffset+8], maxEncryptedChunkSize)
+
+	err := bks.Import(bytes.NewReader(tampered), func(name string) (io.Writer, error) {
+		return io.Discard, nil
+	})
+	if err == nil || !strings.Contains(err.Error(), "truncated block") {
+		t.Fatalf("expected truncated block error, got: %v", err)
+	}
+}
+
+func TestBksArchiveCRCFailureDoesNotWriteInvalidChunk(t *testing.T) {
+	bks := BksArchive{
+		Password:  testPassword,
+		ChunkSize: 1024,
+	}
+	var archived bytes.Buffer
+	if err := bks.Export("source.bin", bytes.NewReader([]byte("data")), &archived); err != nil {
+		t.Fatal(err)
+	}
+	tampered := append([]byte{}, archived.Bytes()...)
+	nameLen := binary.BigEndian.Uint32(tampered[5:9])
+	chunkLenOffset := 9 + int(nameLen) + 4
+	chunkLen := binary.BigEndian.Uint64(tampered[chunkLenOffset : chunkLenOffset+8])
+	chunkCRCOffset := chunkLenOffset + 8 + int(chunkLen)
+	tampered[chunkCRCOffset+3] ^= 0xff
+
+	var output bytes.Buffer
+	err := bks.Import(bytes.NewReader(tampered), func(name string) (io.Writer, error) {
+		return &output, nil
+	})
+	if err == nil {
+		t.Fatal("expected CRC error")
+	}
+	if output.Len() != 0 {
+		t.Fatalf("wrote %d bytes from a chunk that failed integrity validation", output.Len())
 	}
 }
 

@@ -113,11 +113,12 @@ func checkMovedDirs(srcDir string, distDir string, entries []archive.DirectoryEn
 		if count <= 0 {
 			return 0
 		}
-		return float64(len(entries)+len(files)) / float64(count)
+		return float64(count) / float64(len(entries)+len(files))
 	}
 
 	// 移動したものかどうかを決定する
 	moved := []MovedDir{}
+	usedEntries := make(map[string]struct{})
 	for _, file := range remainFiles {
 		possiblesInDir, ok := possiblesInDirs[file.Name()]
 		if !ok {
@@ -127,6 +128,9 @@ func checkMovedDirs(srcDir string, distDir string, entries []archive.DirectoryEn
 		decideKey := ""
 		decidePercent := float64(0)
 		for key, entries := range possiblesInEntries {
+			if _, used := usedEntries[key]; used {
+				continue
+			}
 			percent := calcSamePercent(entries, possiblesInDir)
 			if decideKey == "" || percent > decidePercent {
 				decideKey = key
@@ -136,6 +140,7 @@ func checkMovedDirs(srcDir string, distDir string, entries []archive.DirectoryEn
 		if decidePercent < 0.5 {
 			continue
 		}
+		usedEntries[decideKey] = struct{}{}
 
 		for _, entry := range entries {
 			if entry.Type != archive.Directory {

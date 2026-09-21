@@ -2,6 +2,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"sync"
@@ -28,12 +29,11 @@ func main() {
 		ChunkSize: args.ChunkSize,
 		Limit:     core.SettingsLimit{Size: args.LimitSize, Wait: args.LimitWait},
 	}
-	run := func() {
+	run := func() error {
 		if settings.Password == "" {
 			input, err := cli.InputPassword()
 			if err != nil {
-				fmt.Println(err.Error())
-				os.Exit(1)
+				return err
 			}
 			settings.Password = input
 		}
@@ -41,13 +41,20 @@ func main() {
 		wg := sync.WaitGroup{}
 		toViewQueue := make(chan view.MessageToView, 64)
 		toManagerQueue := make(chan view.MessageToManager, 64)
+		viewResult := make(chan error, 1)
 
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
 			model, err := view.Run(args.Mode, toViewQueue, toManagerQueue)
 			if err != nil {
-				fmt.Println(err.Error())
+				// UI が起動できなくても core の送信を受け続け、処理停止を防ぐ。
+				for msg := range toViewQueue {
+					if msg.MsgType == view.FINISHED {
+						break
+					}
+				}
+				viewResult <- err
 				return
 			}
 
@@ -56,20 +63,29 @@ func main() {
 					fmt.Println(e)
 				}
 			}
+			viewResult <- nil
 		}()
+		var operationErr error
 		if args.Mode == cli.ModeBackup {
-			core.Backup(settings, toViewQueue, toManagerQueue)
+			operationErr = core.Backup(settings, toViewQueue, toManagerQueue)
 		} else {
-			core.Restore(settings, toViewQueue, toManagerQueue)
+			operationErr = core.Restore(settings, toViewQueue, toManagerQueue)
 		}
 		wg.Wait()
+		return errors.Join(operationErr, <-viewResult)
 	}
 
 	switch args.Mode {
 	case cli.ModeBackup:
-		run()
+		if err := run(); err != nil {
+			fmt.Println(err.Error())
+			os.Exit(1)
+		}
 	case cli.ModeRestore:
-		run()
+		if err := run(); err != nil {
+			fmt.Println(err.Error())
+			os.Exit(1)
+		}
 	case cli.ModeVersion:
 		fmt.Println(constants.APP_VERSION)
 	case cli.ModeHelp:

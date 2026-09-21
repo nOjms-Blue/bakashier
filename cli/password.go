@@ -11,6 +11,9 @@ import (
 // ErrCanceled はユーザーが入力をキャンセルしたことを表します。
 var ErrCanceled = errors.New("password input canceled")
 
+// ErrEmptyPassword は空のパスワードが確定されたことを表します。
+var ErrEmptyPassword = errors.New("password must not be empty")
+
 // passwordModel は「パスワード入力だけ」を行うBubble Teaのモデルです。
 type passwordModel struct {
 	ti       textinput.Model
@@ -66,6 +69,24 @@ func (m passwordModel) View() string {
 	return fmt.Sprintf("Password %s\n(Enter: OK, Esc/Ctrl+C: Cancel)", m.ti.View())
 }
 
+func passwordResult(pm passwordModel) (string, error) {
+	if pm.canceled {
+		return "", ErrCanceled
+	}
+	if pm.value == "" {
+		return "", ErrEmptyPassword
+	}
+	return pm.value, nil
+}
+
+func asPasswordModel(finalModel tea.Model) (passwordModel, error) {
+	pm, ok := finalModel.(passwordModel)
+	if !ok {
+		return passwordModel{}, fmt.Errorf("unexpected password model type %T", finalModel)
+	}
+	return pm, nil
+}
+
 // InputPassword は Bubble Tea を起動してパスワードを入力させ、確定した文字列を返します。
 // キャンセル時は ErrCanceled を返します。
 func InputPassword() (string, error) {
@@ -77,9 +98,9 @@ func InputPassword() (string, error) {
 		return "", err
 	}
 
-	pm := finalModel.(passwordModel)
-	if pm.canceled {
-		return "", ErrCanceled
+	pm, err := asPasswordModel(finalModel)
+	if err != nil {
+		return "", err
 	}
-	return pm.value, nil
+	return passwordResult(pm)
 }

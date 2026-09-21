@@ -32,6 +32,7 @@ type model struct {
 type channelClosedMsg struct{}
 
 const MAX_ERROR_LOGS int = 4
+const MAX_STORED_ERROR_LOGS int = 1000
 
 func receiveMessageCmd(queue <-chan MessageToView) tea.Cmd {
 	return func() tea.Msg {
@@ -83,7 +84,11 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.workers[msg.WorkerId] = status
 			}
 		case ERROR:
-			m.ErrorLog = append(m.ErrorLog, msg.Detail)
+			if len(m.ErrorLog) < MAX_STORED_ERROR_LOGS {
+				m.ErrorLog = append(m.ErrorLog, msg.Detail)
+			} else if len(m.ErrorLog) == MAX_STORED_ERROR_LOGS {
+				m.ErrorLog = append(m.ErrorLog, "additional errors omitted")
+			}
 		case FINISHED:
 			return m, tea.Quit
 		}
