@@ -163,7 +163,10 @@ func loadDirectoryEntries(directoryEntryFile string, password string) ([]archive
 	src, err := os.Open(directoryEntryFile)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
-			return []archive.DirectoryEntry{}, nil
+			parent, parentErr := os.Stat(filepath.Dir(directoryEntryFile))
+			if parentErr == nil && parent.IsDir() {
+				return []archive.DirectoryEntry{}, nil
+			}
 		}
 		return []archive.DirectoryEntry{}, err
 	}
